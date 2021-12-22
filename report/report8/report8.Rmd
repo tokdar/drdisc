@@ -1,0 +1,285 @@
+---
+title: "report8"
+author: "Haoliang Zheng"
+date: "12/17/2021"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(fig.align = 'center', 
+                      fig.width=6, fig.height=7)
+
+library(abind)
+library(knitr)
+library(latex2exp)
+require(magrittr)
+require(plyr)
+library(tidyverse)
+library(coda)
+library(doParallel)
+library(doMC) 
+library(foreach)
+library(doRNG)
+
+bunch <- FALSE
+N_para <- 6
+
+registerDoMC(6)
+
+source("./codes/new-codes.R")
+source("./codes/test-codes.R")
+source("./codes/other-codes.R")
+```
+
+# data
+
+```{r}
+vote <- read.csv("./codes/vote_data.csv")
+str(vote)
+vote <- subset(vote, abs(from_requirement_threshold) < 0.5)
+set.seed(1234)
+train.ss <- sample(nrow(vote), 15e3)
+
+preds <- model.matrix(~ #major.requirement 
+                        + ISS.against.recommendation 
+                      #+ shares.oustanding.base 
+                      #+ special.meeting 
+                      + analyst.coverage 
+                      #+ institutional.ownership 
+                      + past.stock.return 
+                      + q 
+                      + firm.size, 
+                      data = vote)[,-1]
+preds.train <- scale(preds[train.ss,])
+x <- cbind(1, preds.train)
+x.test <- cbind(1, scale(preds[-train.ss,],
+                         center=attr(preds.train,"scaled:center"),
+                         scale=attr(preds.train,"scaled:scale")))
+dimnames(x)[[2]][1] <- "Intercept"
+dimnames(x.test)[[2]][1] <- "Intercept"
+x.names <- dimnames(x)[[2]]
+
+y <- 2*vote[train.ss,"from_requirement_threshold"]
+y.test <- 2*vote[-train.ss,"from_requirement_threshold"]
+
+bunch <- FALSE
+pos.est <- TRUE
+```
+
+```{r}
+N_para <- 6
+p <- 6
+set.seed(123)
+
+b_init <- replicate(N_para, 
+                    cbind(rnorm(n=5, sd=3), rnorm(n=5, sd=1.5), rnorm(n=5, sd=0.5),
+                          rnorm(n=5, sd=0.25), rnorm(n=5, sd=0.15), rnorm(n=5, sd=0.5))
+                    )
+a_init <- replicate(N_para, rnorm(n = p, sd = 1.5))
+```
+
+# algorithms
+
+## old
+
+```{r simxnew, cache=TRUE}
+sim.x_old_multi <- foreach(i = 1:N_para) %dorng%
+  bdregjump_neal8(y=y, x=x, b=b_init[,,i], burn=2000, nsamp=10000, thin=1,
+                  jump=list(a=a_init[,i], prec = 1/100, ncand = 10,
+                            positive=pos.est, update.jbw=TRUE, neal8=FALSE))
+```
+
+```{r}
+save(sim.x_old_multi, y, x, b_init, a_init, file = "./report/report8/old_multi.RData")
+```
+
+```{r}
+neal_old_list <- multi_chain_coda(sim.x_old_multi, N_para, p, order)
+
+plot(neal_old_list)
+gelman.diag(neal_old_list)
+```
+
+## neal8
+
+```{r simxnew, cache=TRUE}
+sim.x_neal_multi <- foreach(i = 1:N_para) %dorng%
+  bdregjump_neal8(y=y, x=x, b=b_init[,,i], burn=2000, nsamp=10000, thin=1,
+                  jump=list(a=a_init[,i], prec = 1/100, ncand = 10,
+                            positive=pos.est, update.jbw=TRUE, neal8=TRUE))
+```
+
+```{r}
+save(sim.x_neal_multi, y, x, b_init, a_init, file = "./report/report8/neal_multi.RData")
+```
+
+```{r}
+neal_coda_list <- multi_chain_coda(sim.x_neal_multi, N_para, p, order)
+
+plot(neal_coda_list)
+gelman.diag(neal_coda_list)
+```
+
+chain 1 gets wrong
+
+## adapt
+
+```{r simxnew_adap, cache=TRUE}
+sim.x_new_multi <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt(y=y, x=x, b=b_init[,,i], burn=2000, nsamp=10000, thin=1,
+                  jump=list(a=a_init[,i], prec = 1/100, positive=pos.est, update.jbw=TRUE))
+```
+
+```{r}
+save(sim.x_new_multi, y, x, b_init, a_init, file = "./report/report8/adapt_multi.RData")
+```
+
+```{r}
+adapt_coda_list <- multi_chain_coda(sim.x_new_multi, N_para, p, order)
+
+plot(adapt_coda_list)
+gelman.diag(adapt_coda_list)
+```
+
+chain 1 gets wrong
+
+### get lambda from adapt
+
+```{r}
+par(mfrow = c(3,2))
+for(i in 1:p){
+  plot(exp(sim.x_new_multi[[i]]$loglambda_adap[4000:10000]),
+       type = "l", main = paste0("lambda, chain", i))
+}
+```
+
+### get cov from neal
+
+```{r}
+mat1 <- cov(t(sim.x_neal_multi[[2]]$a))
+mat2 <- cov(t(sim.x_neal_multi[[3]]$a))
+mat3 <- cov(t(sim.x_neal_multi[[4]]$a))
+mat4 <- cov(t(sim.x_neal_multi[[5]]$a))
+mat5 <- cov(t(sim.x_neal_multi[[6]]$a))
+
+covarray <- abind(mat1, mat2, mat3, mat4, mat5, along=3)
+cov_proposal <- apply(covarray, c(1,2), median)
+cov_proposal
+```
+
+# handtune "adapt" algorithm
+
+## lambda = 1
+
+```{r}
+adapt_handtune_1 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_handtune(y=y, x=x, b=b_init[,,i], burn=2000, nsamp=10000, thin=1,
+                           cov_tune = cov_proposal, lambda_tune = 1,
+                           jump=list(a=a_init[,i], prec = 1/100, positive=pos.est, update.jbw=TRUE))
+```
+
+```{r}
+cov_tune = cov_proposal
+lambda_tune = 1
+save(adapt_handtune_1, y, x, b_init, a_init, cov_tune, lambda_tune, file = "./report/report8/adapt_handtune_1.RData")
+```
+
+```{r}
+handtune_1_coda_list <- multi_chain_coda(adapt_handtune_1, N_para, p, order)
+
+plot(handtune_1_coda_list)
+gelman.diag(handtune_1_coda_list)
+```
+
+## lambda = 1.5
+
+```{r}
+adapt_handtune_15 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_handtune(y=y, x=x, b=b_init[,,i], burn=2000, nsamp=10000, thin=1,
+                           cov_tune = cov_proposal, lambda_tune = 1.5,
+                           jump=list(a=a_init[,i], prec = 1/100, positive=pos.est, update.jbw=TRUE))
+```
+
+```{r}
+cov_tune = cov_proposal
+lambda_tune = 1.5
+save(adapt_handtune_15, y, x, b_init, a_init, cov_tune, lambda_tune, file = "./report/report8/adapt_handtune_15.RData")
+```
+
+
+```{r}
+handtune_15_coda_list <- multi_chain_coda(adapt_handtune_15, N_para, p, order)
+
+plot(handtune_15_coda_list)
+gelman.diag(handtune_15_coda_list)
+```
+
+## lambda = 2
+
+```{r}
+adapt_handtune_2 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_handtune(y=y, x=x, b=b_init[,,i], burn=2000, nsamp=10000, thin=1,
+                           cov_tune = cov_proposal, lambda_tune = 2,
+                           jump=list(a=a_init[,i], prec = 1/100, positive=pos.est, update.jbw=TRUE))
+```
+
+```{r}
+cov_tune = cov_proposal
+lambda_tune = 2
+save(adapt_handtune_2, y, x, b_init, a_init, cov_tune, lambda_tune, file = "./report/report8/adapt_handtune_2.RData")
+```
+
+```{r}
+handtune_2_coda_list <- multi_chain_coda(adapt_handtune_2, N_para, p, order)
+
+plot(handtune_2_coda_list)
+gelman.diag(handtune_2_coda_list)
+```
+
+## lambda = 2.5
+
+```{r}
+adapt_handtune_25 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_handtune(y=y, x=x, b=b_init[,,i], burn=2000, nsamp=10000, thin=1,
+                           cov_tune = cov_proposal, lambda_tune = 2.5,
+                           jump=list(a=a_init[,i], prec = 1/100, positive=pos.est, update.jbw=TRUE))
+```
+
+```{r}
+cov_tune = cov_proposal
+lambda_tune = 2.5
+save(adapt_handtune_25, y, x, b_init, a_init, cov_tune, lambda_tune, file = "./report/report8/adapt_handtune_25.RData")
+```
+
+```{r}
+handtune_25_coda_list <- multi_chain_coda(adapt_handtune_25, N_para, p, order)
+
+plot(handtune_25_coda_list)
+gelman.diag(handtune_25_coda_list)
+```
+
+## lambda = 3
+
+```{r}
+adapt_handtune_3 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_handtune(y=y, x=x, b=b_init[,,i], burn=2000, nsamp=10000, thin=1,
+                           cov_tune = cov_proposal, lambda_tune = 3,
+                           jump=list(a=a_init[,i], prec = 1/100, positive=pos.est, update.jbw=TRUE))
+```
+
+```{r}
+cov_tune = cov_proposal
+lambda_tune = 3
+save(adapt_handtune_3, y, x, b_init, a_init, cov_tune, lambda_tune, file = "./report/report8/adapt_handtune_3.RData")
+```
+
+```{r}
+handtune_3_coda_list <- multi_chain_coda(adapt_handtune_3, N_para, p, order)
+
+plot(handtune_3_coda_list)
+gelman.diag(handtune_3_coda_list)
+```
