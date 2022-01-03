@@ -105,8 +105,8 @@ multi_chain_coda_noa <- function(result_multi, N_para, p, order){
   matrix_result <- NULL
   for(i in 1:N_para){
     matrix_result <- NULL
-    for(k in 1:p){
-      for(j in 1:order){
+    for(j in 1:order){
+      for(k in 1:p){
         bijk <- matrix(result_multi[[i]]$b[j,k,], ncol = 1)
         colnames(bijk) <- paste0("b",j,k)
         matrix_result <- cbind(matrix_result, bijk)
@@ -139,7 +139,6 @@ save(noa_o8_multi, y, x, b_init, order, file = "./report/report9/noa_o8_multi.RD
 
 noa_o8_multi_coda <- multi_chain_coda_noa(noa_o8_multi, N_para, p, 8)
 plot(noa_o8_multi_coda)
-gelman.diag(noa_o8_multi_coda)
 ```
 
 ## order = 10
@@ -152,6 +151,9 @@ noa_o10_multi <- foreach(i = 1:N_para) %dorng%
 ```{r}
 order <- 10
 save(noa_o10_multi, y, x, b_init, order, file = "./report/report9/noa_o10_multi.RData")
+
+noa_o10_multi_coda <- multi_chain_coda_noa(noa_o10_multi, N_para, p, 10)
+plot(noa_o10_multi_coda)
 ```
 
 ## order = 13
@@ -164,6 +166,8 @@ noa_o13_multi <- foreach(i = 1:N_para) %dorng%
 ```{r}
 order <- 13
 save(noa_o13_multi, y, x, b_init, order, file = "./report/report9/noa_o13_multi.RData")
+noa_o13_multi_coda <- multi_chain_coda_noa(noa_o13_multi, N_para, p, 13)
+plot(noa_o13_multi_coda)
 ```
 
 ## order = 15
@@ -176,6 +180,8 @@ noa_o15_multi <- foreach(i = 1:N_para) %dorng%
 ```{r}
 order <- 15
 save(noa_o15_multi, y, x, b_init, order, file = "./report/report9/noa_o15_multi.RData")
+noa_o15_multi_coda <- multi_chain_coda_noa(noa_o15_multi, N_para, p, 15)
+plot(noa_o15_multi_coda)
 ```
 
 
