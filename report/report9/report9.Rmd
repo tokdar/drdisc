@@ -1,0 +1,181 @@
+---
+title: "report9"
+author: "Haoliang Zheng"
+date: "12/24/2021"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(fig.align = 'center', 
+                      fig.width=6, fig.height=7)
+
+library(abind)
+library(knitr)
+library(latex2exp)
+require(magrittr)
+require(plyr)
+library(tidyverse)
+library(coda)
+library(doParallel)
+library(doMC) 
+library(foreach)
+library(doRNG)
+
+adapt <- FALSE
+bunch <- FALSE
+N_para <- 6
+
+registerDoMC(6)
+
+source("./codes/new-codes.R")
+source("./codes/test-codes.R")
+source("./codes/other-codes.R")
+```
+
+# data
+
+```{r}
+vote <- read.csv("./codes/vote_data.csv")
+str(vote)
+vote <- subset(vote, abs(from_requirement_threshold) < 0.5)
+set.seed(1234)
+train.ss <- sample(nrow(vote), 15e3)
+
+preds <- model.matrix(~ #major.requirement 
+                        + ISS.against.recommendation 
+                      #+ shares.oustanding.base 
+                      #+ special.meeting 
+                      + analyst.coverage 
+                      #+ institutional.ownership 
+                      + past.stock.return 
+                      + q 
+                      + firm.size, 
+                      data = vote)[,-1]
+preds.train <- scale(preds[train.ss,])
+x <- cbind(1, preds.train)
+x.test <- cbind(1, scale(preds[-train.ss,],
+                         center=attr(preds.train,"scaled:center"),
+                         scale=attr(preds.train,"scaled:scale")))
+dimnames(x)[[2]][1] <- "Intercept"
+dimnames(x.test)[[2]][1] <- "Intercept"
+x.names <- dimnames(x)[[2]]
+
+y <- 2*vote[train.ss,"from_requirement_threshold"]
+y.test <- 2*vote[-train.ss,"from_requirement_threshold"]
+
+bunch <- FALSE
+pos.est <- TRUE
+```
+
+```{r}
+N_para <- 6
+p <- 6
+set.seed(123)
+
+b_init <- replicate(N_para, 
+                    cbind(rnorm(n=5, sd=3), rnorm(n=5, sd=1.5), rnorm(n=5, sd=0.5),
+                          rnorm(n=5, sd=0.25), rnorm(n=5, sd=0.15), rnorm(n=5, sd=0.5))
+                    )
+```
+
+# algorithms, no alpha
+
+
+```{r simxnew, cache=TRUE}
+noa_multi <- foreach(i = 1:N_para) %dorng%
+  bdregjump_noa(y=y, x=x, b=b_init[,,i], burn=2000, nsamp=10000, thin=1)
+```
+
+```{r}
+save(noa_multi, y, x, b_init, file = "./report/report9/noa_multi.RData")
+```
+
+```{r}
+load("./report/report9/noa_multi.RData")
+```
+
+
+```{r}
+multi_chain_coda_noa <- function(result_multi, N_para, p, order){
+  coda_result <- list()
+  matrix_result <- NULL
+  for(i in 1:N_para){
+    matrix_result <- NULL
+    for(k in 1:p){
+      for(j in 1:order){
+        bijk <- matrix(result_multi[[i]]$b[j,k,], ncol = 1)
+        colnames(bijk) <- paste0("b",j,k)
+        matrix_result <- cbind(matrix_result, bijk)
+      }
+    }
+    coda_result[[i]] <- mcmc(matrix_result, start = 1001)
+  }
+  coda_result_list <- mcmc.list(coda_result)
+  
+  return(coda_result_list)
+}
+
+
+plot(coda_result_list)
+gelman.diag(coda_result_list)
+```
+
+
+## order = 8
+
+
+```{r}
+noa_o8_multi <- foreach(i = 1:N_para) %dorng%
+  bdregjump_noa(y=y, x=x, b=b_init[,,i], burn=0, nsamp=5000, thin=1, order = 8)
+```
+
+```{r}
+order <- 8
+save(noa_o8_multi, y, x, b_init, order, file = "./report/report9/noa_o8_multi.RData")
+
+noa_o8_multi_coda <- multi_chain_coda_noa(noa_o8_multi, N_para, p, 8)
+plot(noa_o8_multi_coda)
+gelman.diag(noa_o8_multi_coda)
+```
+
+## order = 10
+
+```{r}
+noa_o10_multi <- foreach(i = 1:N_para) %dorng%
+  bdregjump_noa(y=y, x=x, b=b_init[,,i], burn=0, nsamp=5000, thin=1, order = 10)
+```
+
+```{r}
+order <- 10
+save(noa_o10_multi, y, x, b_init, order, file = "./report/report9/noa_o10_multi.RData")
+```
+
+## order = 13
+
+```{r}
+noa_o13_multi <- foreach(i = 1:N_para) %dorng%
+  bdregjump_noa(y=y, x=x, b=b_init[,,i], burn=0, nsamp=5000, thin=1, order = 13)
+```
+
+```{r}
+order <- 13
+save(noa_o13_multi, y, x, b_init, order, file = "./report/report9/noa_o13_multi.RData")
+```
+
+## order = 15
+
+```{r}
+noa_o15_multi <- foreach(i = 1:N_para) %dorng%
+  bdregjump_noa(y=y, x=x, b=b_init[,,i], burn=0, nsamp=5000, thin=1, order = 15)
+```
+
+```{r}
+order <- 15
+save(noa_o15_multi, y, x, b_init, order, file = "./report/report9/noa_o15_multi.RData")
+```
+
+

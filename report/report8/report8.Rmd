@@ -25,6 +25,7 @@ library(doMC)
 library(foreach)
 library(doRNG)
 
+adapt <- FALSE
 bunch <- FALSE
 N_para <- 6
 
