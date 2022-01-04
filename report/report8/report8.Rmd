@@ -9,6 +9,7 @@ output:
 ---
 
 ```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "/Users/zhl/Desktop/drdisc")
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_chunk$set(fig.align = 'center', 
                       fig.width=6, fig.height=7)
@@ -30,11 +31,14 @@ bunch <- FALSE
 N_para <- 6
 
 registerDoMC(6)
+```
 
+```{r source, include=FALSE}
 source("./codes/new-codes.R")
 source("./codes/test-codes.R")
 source("./codes/other-codes.R")
 ```
+
 
 # data
 
@@ -107,7 +111,7 @@ gelman.diag(neal_old_list)
 
 ## neal8
 
-```{r simxnew, cache=TRUE}
+```{r simxnewne, cache=TRUE}
 sim.x_neal_multi <- foreach(i = 1:N_para) %dorng%
   bdregjump_neal8(y=y, x=x, b=b_init[,,i], burn=2000, nsamp=10000, thin=1,
                   jump=list(a=a_init[,i], prec = 1/100, ncand = 10,
