@@ -95,7 +95,9 @@ pos.est <- TRUE
 ```
 
 ```{r}
+table(x[,1])
 table(x[,2])
+table(x[,3])
 ```
 
 

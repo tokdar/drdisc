@@ -132,7 +132,7 @@ order <- 5
 b_init <- replicate(N_para, matrix(rnorm(n = order*p, sd=3), order, p))
 
 noa_o5_multi_new <- foreach(i = 1:N_para) %dorng%
-  bdregjump_noa(y=y, x=x, b=b_init[,,i], burn=0, nsamp=5000, thin=1, order = order)
+  bdregjump_noa(y=y, x=x, b=b_init[,,i], burn=0, nsamp=5000, thin=1, order = order, print.process = TRUE)
 
 save(noa_o5_multi_new, y, x, b_init, order, file = "./report/report9/noa_o5_multi_new.RData")
 ```
@@ -157,7 +157,7 @@ save(noa_o8_multi_new, y, x, b_init, order, file = "./report/report9/noa_o8_mult
 ```
 
 ```{r}
-noa_o8_multi_coda_new <- multi_chain_coda_noa(noa_o8_multi_new, N_para, p, order)
+noa_o8_multi_coda_new <- multi_chain_coda_noa(noa_o8_multi_new, burn = 0, N_para, p, order)
 plot(noa_o8_multi_coda_new)
 ```
 
@@ -175,7 +175,7 @@ save(noa_o10_multi_new, y, x, b_init, order, file = "./report/report9/noa_o10_mu
 ```
 
 ```{r}
-noa_o10_multi_coda_new <- multi_chain_coda_noa(noa_o10_multi_new, N_para, p, order)
+noa_o10_multi_coda_new <- multi_chain_coda_noa(noa_o10_multi_new, burn = 0, N_para, p, order)
 plot(noa_o10_multi_coda_new)
 ```
 
@@ -194,7 +194,7 @@ save(noa_o13_multi_new, y, x, b_init, order, file = "./report/report9/noa_o13_mu
 ```
 
 ```{r}
-noa_o13_multi_coda_new <- multi_chain_coda_noa(noa_o13_multi_new, N_para, p, order)
+noa_o13_multi_coda_new <- multi_chain_coda_noa(noa_o13_multi_new, burn = 0, N_para, p, order)
 plot(noa_o13_multi_coda_new)
 ```
 
@@ -212,7 +212,7 @@ save(noa_o15_multi_new, y, x, b_init, order, file = "./report/report9/noa_o15_mu
 ```
 
 ```{r}
-noa_o15_multi_coda_new <- multi_chain_coda_noa(noa_o15_multi_new, N_para, p, order)
+noa_o15_multi_coda_new <- multi_chain_coda_noa(noa_o15_multi_new, burn = 0, N_para, p, order)
 plot(noa_o15_multi_coda_new)
 ```
 

@@ -200,7 +200,7 @@ bdregjump_noa <- function(y, x=1, b=NULL, nsamp=100, thin=1, burn=100,
   
   yFn <- get.poly.mat
   
-  get.miss.reject.x <- function(b, n, x, a, shapes=c(1,1), jbw=0.16, positive=FALSE){
+  get.miss.reject.x <- function(b, n, x, shapes=c(1,1), print.n.remain = FALSE){
     n.hits <- 0
     n.miss <- 0
     Poly.miss <- NULL
@@ -209,23 +209,17 @@ bdregjump_noa <- function(y, x=1, b=NULL, nsamp=100, thin=1, burn=100,
     x.miss <- NULL
     y.miss <- NULL
     
-    xa <- c(x %*% a)
-    if(positive) xa <- pmax(0, xa)
-    
     n.remain <- n
     ix.remain <- 1:n
     while(n.remain > 0){
       z <- 2*rbeta(n.remain, shapes[1],shapes[2])-1
       pm <- matrix(yFn(z), nrow=n.remain)
-      hk <- half.kern(z,jbw)
       x.remain <- x[ix.remain,,drop=FALSE]
-      xa.remain <- xa[ix.remain]
-      w <- rowSums(x.remain * (pm %*% b)) + xa.remain*hk
+      w <- rowSums(x.remain * (pm %*% b))
       u <- (runif(n.remain) < Phi(w))
       n.reject <- sum(!u)
       if(n.reject > 0){
         Poly.miss <- rbind(Poly.miss, pm[!u,])
-        Half.miss <- c(Half.miss, hk[!u])
         w.miss <- c(w.miss, w[!u])
         x.miss <- rbind(x.miss, x.remain[!u,,drop=FALSE])
         y.miss <- c(y.miss, z[!u])
@@ -233,6 +227,8 @@ bdregjump_noa <- function(y, x=1, b=NULL, nsamp=100, thin=1, burn=100,
       n.remain <- n.reject
       ix.remain <- ix.remain[!u]
       n.miss <- n.miss + n.reject
+      
+      if(print.n.remain) print(n.remain)
     }
     return(list(Poly.miss=as.matrix(Poly.miss), Half.miss=Half.miss, 
                 w.miss=w.miss, n.miss=n.miss, x.miss=x.miss, y.miss=y.miss))
@@ -247,14 +243,12 @@ bdregjump_noa <- function(y, x=1, b=NULL, nsamp=100, thin=1, burn=100,
   nacpt.bp <- 0
   bp.df <- 6
   
-  a <- rep(0, p)
-  
   time.stamp.0 <- proc.time()
   for(iter in -(burn-1):(nsamp*thin)){
     
     w.obs <- rowSums(x * (Poly.obs %*% b))
     
-    missing.stuff <- get.miss.reject.x(b, n, x, a, shapes)
+    missing.stuff <- get.miss.reject.x(b, n, x, shapes)
     n.miss <- missing.stuff$n.miss
     Poly.miss <- missing.stuff$Poly.miss
     Half.miss <- missing.stuff$Half.miss
