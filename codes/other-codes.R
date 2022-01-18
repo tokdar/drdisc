@@ -20,13 +20,13 @@ latex_matrix_display <- function(result, N_para, nsamp){
 }
 
 
-multi_chain_coda <- function(result_multi, N_para, p, order){
+multi_chain_coda <- function(result_multi, burn = 1000, N_para, p, order){
   coda_result <- list()
   matrix_result <- NULL
   for(i in 1:N_para){
     matrix_result <- NULL
-    for(k in 1:p){
-      for(j in 1:order){
+    for(j in 1:order){
+      for(k in 1:p){
         bijk <- matrix(result_multi[[i]]$b[j,k,], ncol = 1)
         colnames(bijk) <- paste0("b",j,k)
         matrix_result <- cbind(matrix_result, bijk)
@@ -36,12 +36,34 @@ multi_chain_coda <- function(result_multi, N_para, p, order){
     colnames(a_result) <- paste0("a",1:p)
     jbw_result <- result_multi[[i]]$jbw
     matrix_result <- cbind(matrix_result, a_result, jbw_result)
-    coda_result[[i]] <- mcmc(matrix_result, start = 1001)
+    coda_result[[i]] <- mcmc(matrix_result, start = burn+1)
   }
   coda_result_list <- mcmc.list(coda_result)
   return(coda_result_list)
 }
 
+
+multi_chain_parallel_coda <- function(result_multi, burn = 1000, N_para, p, order){
+  coda_result <- list()
+  matrix_result <- NULL
+  for(i in 1:N_para){
+    matrix_result <- NULL
+    for(j in 1:order){
+      for(k in 1:p){
+        bijk <- matrix(result_multi[[i]]$b[j,k,], ncol = 1)
+        colnames(bijk) <- paste0("b",j,k)
+        matrix_result <- cbind(matrix_result, bijk)
+      }
+    }
+    a_result <- t(PT_order15_jbw_L3[[1]]$a_PT[,1,])
+    colnames(a_result) <- paste0("a",1:p)
+    jbw_result <- result_multi[[i]]$jbw
+    matrix_result <- cbind(matrix_result, a_result, jbw_result)
+    coda_result[[i]] <- mcmc(matrix_result, start = burn+1)
+  }
+  coda_result_list <- mcmc.list(coda_result)
+  return(coda_result_list)
+}
 
 get.result.bdregjump <- function(fit.x, x.obs, y.obs, b0x, a0, thin_index=NULL){
   cat("Runtime", round(fit.x$runtime[3]), "seconds\n")
@@ -169,7 +191,7 @@ plot_multi_a <- function(result_M1_chol, a0){
 }
 
 
-real_data_plot <- function(fit.x, x, x.test, y.test){
+real_data_plot <- function(fit.x, x, x.test, y.test, yFn){
   cat("Runtime", round(fit.x$runtime[3]), "seconds\n")
   b.est <- fit.x$b; dimnames(b.est)[[2]] <- x.names
   a.est <- fit.x$a; dimnames(a.est)[[1]] <- x.names

@@ -198,6 +198,24 @@ noa_o13_multi_coda_new <- multi_chain_coda_noa(noa_o13_multi_new, burn = 0, N_pa
 plot(noa_o13_multi_coda_new)
 ```
 
+## order = 13, new seed2
+
+```{r}
+set.seed(123)
+order <- 13
+b_init <- replicate(N_para, matrix(rnorm(n = order*p, sd=5), order, p))
+
+noa_o13_multi_new2 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_noa(y=y, x=x, b=b_init[,,i], burn=0, nsamp=5000, thin=1, order = order)
+
+save(noa_o13_multi_new2, y, x, b_init, order, file = "./report/report9/noa_o13_multi_new2.RData")
+```
+
+```{r}
+noa_o13_multi_coda_new2 <- multi_chain_coda_noa(noa_o13_multi_new2, burn = 0, N_para, p, order)
+plot(noa_o13_multi_coda_new2)
+```
+
 ## order = 15
 
 ```{r}
@@ -217,3 +235,211 @@ plot(noa_o15_multi_coda_new)
 ```
 
 
+## order = 15, new seed2
+
+```{r}
+set.seed(123)
+order <- 15
+b_init <- replicate(N_para, matrix(rnorm(n = order*p, sd=5), order, p))
+
+noa_o15_multi_new2 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_noa(y=y, x=x, b=b_init[,,i], burn=0, nsamp=5000, thin=1, order = order)
+
+save(noa_o15_multi_new2, y, x, b_init, order, file = "./report/report9/noa_o15_multi_new2.RData")
+```
+
+```{r}
+noa_o15_multi_coda_new2 <- multi_chain_coda_noa(noa_o15_multi_new2, burn = 0, N_para, p, order)
+plot(noa_o15_multi_coda_new2)
+```
+
+
+# adapt with order = 15
+
+## initial
+
+```{r}
+set.seed(123)
+N_para <- 6
+p <- 6
+order <- 15
+
+kbw <- 2/(order-1)
+knots <- seq(-1,1,kbw)
+bsd.sq <- (0.67*kbw)^2
+gausskern <- lapply(knots, function(mu) return(function(x) return(exp(-0.5*(x-mu)^2/bsd.sq))))
+get.poly.mat <- function(y) return(sapply(gausskern, function(f) f(y)))
+
+yFn <- get.poly.mat
+
+b_init <- replicate(N_para, matrix(rnorm(n = order*p, sd=5), order, p))
+a_init <- replicate(N_para, rnorm(n = p, sd = 1.5))
+```
+
+## result
+
+```{r adapt_order15, cache=TRUE}
+adapt_order15 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt(y=y, x=x, b=b_init[,,i], burn=2000, nsamp=10000, thin=1, order = 15,
+                  jump=list(a=a_init[,i], prec = 1/100, positive=pos.est, update.jbw=TRUE))
+```
+
+```{r}
+save(adapt_order15, y, x, b_init, a_init, order, file = "./report/report9/adapt_order15.RData")
+```
+
+```{r}
+adapt_order15_coda <- multi_chain_coda(adapt_order15, burn=2000, N_para, p, order)
+
+plot(adapt_order15_coda)
+gelman.diag(adapt_order15_coda)
+```
+
+
+### update.jbw = FALSE
+
+```{r adapt_order15jbw, cache=TRUE}
+adapt_order15_jbw <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt(y=y, x=x, b=b_init[,,i], burn=2000, nsamp=10000, thin=1, order = 15,
+                  jump=list(a=a_init[,i], prec = 1/100, positive=pos.est,
+                            persistence=0.68, update.jbw=FALSE))
+```
+
+```{r}
+save(adapt_order15_jbw, y, x, b_init, a_init, order, file = "./report/report9/adapt_order15_jbw.RData")
+```
+
+```{r}
+adapt_order15_jbw_coda <- multi_chain_coda(adapt_order15_jbw, burn=2000, N_para, p, order)
+
+plot(adapt_order15_jbw_coda)
+
+real_data_plot(adapt_order15_jbw[[1]], x, x.test, y.test, yFn)
+```
+
+
+### update.jbw = FALSE, alpha_star = 0.15
+
+```{r adapt_order15jbw, cache=TRUE}
+adapt_order15_jbw_alpha15 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt(y=y, x=x, b=b_init[,,i], burn=2000, nsamp=10000, thin=1, order = 15,
+                  jump=list(a=a_init[,i], prec = 1/100, positive=pos.est,
+                            persistence=0.68, update.jbw=FALSE),
+                  adap=list(alpha_star = 0.15))
+```
+
+```{r}
+save(adapt_order15_jbw_alpha15, y, x, b_init, a_init, order, file = "./report/report9/adapt_order15_jbw_alpha15.RData")
+```
+
+```{r}
+adapt_order15_jbw_alpha15_coda <- multi_chain_coda(adapt_order15_jbw_alpha15, burn=2000, N_para, p, order)
+
+plot(adapt_order15_jbw_alpha15_coda)
+
+for(i in 1:N_para){
+  plot(adapt_order15_jbw_alpha15[[i]]$a[1,], type = "l")
+}
+
+
+real_data_plot(adapt_order15_jbw_alpha15[[1]], x, x.test, y.test, yFn)
+real_data_plot(adapt_order15_jbw_alpha15[[2]], x, x.test, y.test, yFn)
+real_data_plot(adapt_order15_jbw_alpha15[[5]], x, x.test, y.test, yFn)
+```
+
+### adapt_all
+
+```{r adapt_order15all, cache=TRUE}
+adapt_order15_all <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_all(y=y, x=x, b=b_init[,,i], burn=2000, nsamp=10000, thin=1, order = 15,
+                  jump=list(a=a_init[,i], prec = 1/100, positive=pos.est, update.jbw=TRUE),
+                  adap=list(chol.pivot=TRUE))
+```
+
+```{r}
+save(adapt_order15_all, y, x, b_init, a_init, order, file = "./report/report9/adapt_order15_all.RData")
+```
+
+```{r}
+adapt_order15_all_coda <- multi_chain_coda(adapt_order15_all, burn=2000, N_para, p, order)
+
+plot(adapt_order15_all_coda)
+gelman.diag(adapt_order15_all_coda)
+```
+
+
+### adapt_all, alpha_star = 0.15
+
+```{r adapt_order15all, cache=TRUE}
+adapt_order15_all_alpha15 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_all(y=y, x=x, b=b_init[,,i], burn=2000, nsamp=10000, thin=1, order = 15,
+                  jump=list(a=a_init[,i], prec = 1/100, positive=pos.est, update.jbw=TRUE),
+                  adap=list(alpha_star = 0.15, chol.pivot=TRUE))
+```
+
+```{r}
+save(adapt_order15_all_alpha15, y, x, b_init, a_init, order, file = "./report/report9/adapt_order15_all_alpha15.RData")
+```
+
+```{r}
+adapt_order15_all_alpha15_coda <- multi_chain_coda(adapt_order15_all_alpha15, burn=2000, N_para, p, order)
+
+plot(adapt_order15_all_alpha15_coda)
+gelman.diag(adapt_order15_all_alpha15_coda)
+```
+
+
+```{r}
+adapt_order15_all_alpha15 <- list()
+for(i in 1:N_para){
+  adapt_order15_all_alpha15[[i]] <- 
+    bdregjump_adapt_all(y=y, x=x, b=b_init[,,i], burn=2000, nsamp=10000, thin=1, order = 15,
+                  jump=list(a=a_init[,i], prec = 1/100, positive=pos.est, update.jbw=TRUE),
+                  adap=list(alpha_star = 0.15, chol.pivot=TRUE), print.process = TRUE)
+}
+
+```
+
+
+```{r}
+adapt_order15_all_alpha15_coda <- multi_chain_coda(adapt_order15_all_alpha15, burn=2000, 4, p, order)
+
+plot(adapt_order15_all_alpha15_coda)
+gelman.diag(adapt_order15_all_alpha15_coda)
+```
+
+
+# Algorithm 6
+
+### update.jbw = FALSE
+
+```{r adapt_comp_order15_jbw}
+adapt_comp_order15_jbw <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_comp(y=y, x=x, b=b_init[,,i], burn=2000, nsamp=10000, thin=1, order = 15,
+                       jump=list(a=a_init[,i], prec = 1/100, positive=pos.est,
+                                 persistence=0.68, update.jbw=FALSE))
+```
+
+```{r}
+save(adapt_comp_order15_jbw, y, x, b_init, a_init, order, file = "./report/report9/adapt_comp_order15_jbw.RData")
+```
+
+```{r}
+load("./report/report9/adapt_comp_order15_jbw.RData")
+adapt_comp_order15_jbw_coda <- multi_chain_coda(adapt_comp_order15_jbw, burn=2000, N_para, p, order)
+
+plot(adapt_comp_order15_jbw_coda)
+
+real_data_plot(adapt_comp_order15_jbw[[1]], x, x.test, y.test, yFn)
+real_data_plot(adapt_order15_jbw[[1]], x, x.test, y.test, yFn)
+
+real_data_plot(adapt_comp_order15_jbw[[2]], x, x.test, y.test, yFn)
+
+gelman.diag(adapt_comp_order15_jbw_coda)
+
+adapt_comp_order15_jbw[[1]]$p_accept_corrd[,9900:10000]
+adapt_comp_order15_jbw[[1]]$loglambda_adap[,9900:10000]
+
+plot(adapt_comp_order15_jbw[[1]]$loglambda_adap[1,], type = "l")
+plot(adapt_comp_order15_jbw[[1]]$p_accept_corrd[1,], type = "l")
+```

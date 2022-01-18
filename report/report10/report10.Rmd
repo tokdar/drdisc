@@ -1,0 +1,190 @@
+---
+title: "report10"
+author: "Haoliang Zheng"
+date: "1/12/2022"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "/Users/zhl/Desktop/drdisc")
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(fig.align = 'center', 
+                      fig.width=6, fig.height=7)
+
+library(abind)
+library(knitr)
+library(latex2exp)
+require(magrittr)
+require(plyr)
+library(tidyverse)
+library(coda)
+library(doParallel)
+library(doMC) 
+library(foreach)
+library(doRNG)
+
+adapt <- FALSE
+bunch <- FALSE
+N_para <- 6
+
+registerDoMC(6)
+```
+
+
+```{r source, include=FALSE}
+source("./codes/new-codes.R")
+source("./codes/test-codes.R")
+source("./codes/other-codes.R")
+
+multi_chain_coda_noa <- function(result_multi, burn = 1000, N_para, p, order){
+  coda_result <- list()
+  matrix_result <- NULL
+  for(i in 1:N_para){
+    matrix_result <- NULL
+    for(j in 1:order){
+      for(k in 1:p){
+        bijk <- matrix(result_multi[[i]]$b[j,k,], ncol = 1)
+        colnames(bijk) <- paste0("b",j,k)
+        matrix_result <- cbind(matrix_result, bijk)
+      }
+    }
+    coda_result[[i]] <- mcmc(matrix_result, start = burn+1)
+  }
+  coda_result_list <- mcmc.list(coda_result)
+  
+  return(coda_result_list)
+}
+```
+
+# data
+
+```{r}
+vote <- read.csv("./codes/vote_data.csv")
+str(vote)
+vote <- subset(vote, abs(from_requirement_threshold) < 0.5)
+set.seed(1234)
+train.ss <- sample(nrow(vote), 15e3)
+
+preds <- model.matrix(~ #major.requirement 
+                        + ISS.against.recommendation 
+                      #+ shares.oustanding.base 
+                      #+ special.meeting 
+                      + analyst.coverage 
+                      #+ institutional.ownership 
+                      + past.stock.return 
+                      + q 
+                      + firm.size, 
+                      data = vote)[,-1]
+preds.train <- scale(preds[train.ss,])
+x <- cbind(1, preds.train)
+x.test <- cbind(1, scale(preds[-train.ss,],
+                         center=attr(preds.train,"scaled:center"),
+                         scale=attr(preds.train,"scaled:scale")))
+dimnames(x)[[2]][1] <- "Intercept"
+dimnames(x.test)[[2]][1] <- "Intercept"
+x.names <- dimnames(x)[[2]]
+
+y <- 2*vote[train.ss,"from_requirement_threshold"]
+y.test <- 2*vote[-train.ss,"from_requirement_threshold"]
+
+bunch <- FALSE
+pos.est <- TRUE
+```
+
+```{r}
+N_para <- 6
+p <- 6
+set.seed(123)
+
+b_init <- replicate(N_para, 
+                    cbind(rnorm(n=5, sd=3), rnorm(n=5, sd=1.5), rnorm(n=5, sd=0.5),
+                          rnorm(n=5, sd=0.25), rnorm(n=5, sd=0.15), rnorm(n=5, sd=0.5))
+                    )
+```
+
+
+# adapt with order = 15
+
+## initial
+
+```{r}
+set.seed(123)
+N_para <- 6
+p <- 6
+order <- 15
+
+kbw <- 2/(order-1)
+knots <- seq(-1,1,kbw)
+bsd.sq <- (0.67*kbw)^2
+gausskern <- lapply(knots, function(mu) return(function(x) return(exp(-0.5*(x-mu)^2/bsd.sq))))
+get.poly.mat <- function(y) return(sapply(gausskern, function(f) f(y)))
+
+yFn <- get.poly.mat
+
+b_init <- replicate(N_para, matrix(rnorm(n = order*p, sd=5), order, p))
+a_init <- replicate(N_para, rnorm(n = p, sd = 1.5))
+```
+
+
+### update.jbw = FALSE
+
+```{r adapt_order15jbw, cache=TRUE}
+adapt_order15_jbw_pF <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt(y=y, x=x, b=b_init[,,i], burn=2000, nsamp=10000, thin=1, order = 15,
+                  jump=list(a=a_init[,i], prec = 1/100, positive=pos.est,
+                            persistence=0.68, update.jbw=FALSE, positive = FALSE))
+```
+
+```{r}
+save(adapt_order15_jbw_pF, y, x, b_init, a_init, order, file = "./report/report10/adapt_order15_jbw_pF.RData")
+```
+
+```{r}
+adapt_order15_jbw_pF_coda <- multi_chain_coda(adapt_order15_jbw_pF, burn=2000, N_para, p, order)
+
+plot(adapt_order15_jbw_pF_coda)
+```
+
+
+# parallel tempering
+
+## L = 3
+
+```{r}
+PT_order15_jbw_L3 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_PT(y=y, x=x, b=b_init[,,i], burn=2000, nsamp=10000, thin=1, order = 15,
+                     jump=list(a=a_init[,i], prec = 1/100, positive=pos.est,
+                               persistence=0.68, update.jbw=FALSE))
+```
+
+```{r}
+save(PT_order15_jbw_L3, y, x, b_init, a_init, order, file = "./report/report10/PT_order15_jbw_L3.RData")
+```
+
+```{r}
+PT_order15_jbw_L3_coda <- multi_chain_parallel_coda(PT_order15_jbw_L3, burn=2000, N_para, p, order)
+
+plot(adapt_order15_jbw_pF_coda)
+```
+
+
+```{r}
+PT_order15_jbw_L3_new <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_PT(y=y, x=x, b=b_init[,,i], burn=2000, nsamp=10000, thin=1, order = 15,
+                     jump=list(a=a_init[,i], prec = 1/100, positive=pos.est,
+                               persistence=0.68, update.jbw=FALSE))
+```
+
+## L = 5
+
+```{r}
+PT_order15_jbw_L5 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_PT(y=y, x=x, b=b_init[,,i], burn=2000, nsamp=10000, thin=1, order = 15,
+                     jump=list(a=a_init[,i], prec = 1/100, positive=pos.est,
+                               persistence=0.68, update.jbw=FALSE),
+                     adap=list(parallel = 5, chol.pivot=TRUE))
+```
+
