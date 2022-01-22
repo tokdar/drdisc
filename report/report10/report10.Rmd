@@ -178,6 +178,11 @@ PT_order15_jbw_L3_new <- foreach(i = 1:N_para) %dorng%
                                persistence=0.68, update.jbw=FALSE))
 ```
 
+```{r}
+save(PT_order15_jbw_L3_new, y, x, b_init, a_init, order,
+     file = "./report/report10/PT_order15_jbw_L3_new.RData")
+```
+
 ## L = 5
 
 ```{r}
@@ -188,3 +193,40 @@ PT_order15_jbw_L5 <- foreach(i = 1:N_para) %dorng%
                      adap=list(parallel = 5, chol.pivot=TRUE))
 ```
 
+```{r}
+save(PT_order15_jbw_L5, y, x, b_init, a_init, order,
+     file = "./report/report10/PT_order15_jbw_L5.RData")
+```
+
+```{r}
+PT_order15_jbw_L5_coda <- multi_chain_parallel_coda(PT_order15_jbw_L5, burn=2000, N_para, p, order)
+
+plot(PT_order15_jbw_L5_coda)
+```
+
+## temperature
+
+```{r}
+L <- 5
+par(mar = c(2,2,2,2))
+par(mfrow = c(N_para, 1))
+for(i in 1:N_para){
+  plot(PT_order15_jbw_L5[[i]]$temp[1,], type = "l", ylim=range(PT_order15_jbw_L5[[i]]$temp),
+       main = paste0("starting point ", i))
+  for(j in 2:L){
+    lines(PT_order15_jbw_L5[[i]]$temp[j,], col=tcol(j,.5), lwd=2)
+  }
+}
+```
+
+# plot of a
+
+```{r}
+par(mar = c(2,2,2,2))
+a_parallel_plot(PT_order15_jbw_L5, 1, 6, 5)
+a_parallel_plot(PT_order15_jbw_L5, 2, 6, 5)
+a_parallel_plot(PT_order15_jbw_L5, 3, 6, 5)
+a_parallel_plot(PT_order15_jbw_L5, 4, 6, 5)
+a_parallel_plot(PT_order15_jbw_L5, 5, 6, 5)
+a_parallel_plot(PT_order15_jbw_L5, 6, 6, 5)
+```

@@ -55,7 +55,7 @@ multi_chain_parallel_coda <- function(result_multi, burn = 1000, N_para, p, orde
         matrix_result <- cbind(matrix_result, bijk)
       }
     }
-    a_result <- t(PT_order15_jbw_L3[[1]]$a_PT[,1,])
+    a_result <- t(result_multi[[1]]$a_PT[,1,])
     colnames(a_result) <- paste0("a",1:p)
     jbw_result <- result_multi[[i]]$jbw
     matrix_result <- cbind(matrix_result, a_result, jbw_result)
@@ -63,6 +63,26 @@ multi_chain_parallel_coda <- function(result_multi, burn = 1000, N_para, p, orde
   }
   coda_result_list <- mcmc.list(coda_result)
   return(coda_result_list)
+}
+
+a_parallel_plot <- function(PT_order15_jbw_L3_new, i, p, L, first = TRUE){
+  par(mfrow = c(p, 1))
+  if(first){
+    for(j in 1:p){
+      plot(PT_order15_jbw_L3_new[[i]]$a_PT[j,1,], type="l",
+           ylim=range(PT_order15_jbw_L3_new[[i]]$a_PT[j,1:2,]))
+      lines(PT_order15_jbw_L3_new[[i]]$a_PT[j,2,], col=tcol(2,.5), lwd=2)
+    }
+  }
+  else{
+    for(j in 1:p){
+      plot(PT_order15_jbw_L3_new[[i]]$a_PT[j,1,], type="l",
+           ylim=range(PT_order15_jbw_L3_new[[i]]$a_PT[j,,]))
+      for(k in 2:L){
+        lines(PT_order15_jbw_L3_new[[i]]$a_PT[j,k,], col=tcol(k,.5), lwd=2)
+      }
+    }
+  }
 }
 
 get.result.bdregjump <- function(fit.x, x.obs, y.obs, b0x, a0, thin_index=NULL){
