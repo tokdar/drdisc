@@ -55,7 +55,7 @@ multi_chain_parallel_coda <- function(result_multi, burn = 1000, N_para, p, orde
         matrix_result <- cbind(matrix_result, bijk)
       }
     }
-    a_result <- t(result_multi[[1]]$a_PT[,1,])
+    a_result <- t(result_multi[[i]]$a_PT[,1,])
     colnames(a_result) <- paste0("a",1:p)
     jbw_result <- result_multi[[i]]$jbw
     matrix_result <- cbind(matrix_result, a_result, jbw_result)
