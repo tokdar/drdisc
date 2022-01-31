@@ -2054,8 +2054,8 @@ bdregjump_adapt_PT_fixtemp <- function(y, x=1, b=NULL, nsamp=100, thin=1, burn=1
       if(chain_ind == 1){
         Ntot <- random_walk_result$Ntot
         p_accept <- random_walk_result$p_accept
-        nacpt <- random_walk_result$nacpt
-        nacpt.bp <- random_walk_result$nacpt.bp
+        nacpt <- nacpt + random_walk_result$nacpt
+        nacpt.bp <- nacpt.bp + random_walk_result$nacpt.bp
       }
     }
     
@@ -2119,11 +2119,11 @@ bdregjump_adapt_PT_fixtemp <- function(y, x=1, b=NULL, nsamp=100, thin=1, burn=1
 
 
 bdregjump_adapt_PT_new <- function(y, x=1, b=NULL, nsamp=100, thin=1, burn=100, 
-                               shapes=c(1,1), prec=1, order = 5,
+                               shapes=c(1,1), prec=1, order = 5, 
                                jump=list(a=NULL, persistence=0.5, positive=TRUE,
                                          prec=1, ncand=10, update.jbw=TRUE),
                                adap=list(mu_adap=NULL, Sigma_adap=NULL,
-                                         rho_adap = 1,
+                                         rho_adap = 1, temp_end = 0.01,
                                          alpha_star = 0.234, r_adap = 2/3,
                                          chol.pivot=FALSE, parallel = 5),
                                print.process = FALSE, print.i = FALSE){
@@ -2146,8 +2146,8 @@ bdregjump_adapt_PT_new <- function(y, x=1, b=NULL, nsamp=100, thin=1, burn=100,
   
   L <- adap$parallel
   if(is.null(L)) L <- 5
-  temp <- adap$temp
-  if(is.null(temp)) temp <- 0.01
+  temp_end <- adap$temp_end
+  if(is.null(temp_end)) temp_end <- 0.01
   
   a <- jump$a
   a_PT <- replicate(L, a)
@@ -2212,6 +2212,7 @@ bdregjump_adapt_PT_new <- function(y, x=1, b=NULL, nsamp=100, thin=1, burn=100,
   log.likelihood_PT.store <- matrix(NA, L, nsamp)
   H_l_all <- rep(NA, L-1)
   H_l.store <- matrix(NA, L-1, nsamp)
+  rho_adap_PT.store <- matrix(NA, L-1, nsamp)
   
   count.store <- 0
   nacpt <- 0
@@ -2397,6 +2398,8 @@ bdregjump_adapt_PT_new <- function(y, x=1, b=NULL, nsamp=100, thin=1, burn=100,
                 Ntot = Ntot, p_accept = p_accept, nacpt = nacpt, nacpt.bp = nacpt.bp))
   }
   
+  
+  rho_adap_PT <- rep(log(-log(temp_end^(1/(L-1)))), L-1)
   ########################################################################
   
   time.stamp.0 <- proc.time()
@@ -2430,8 +2433,8 @@ bdregjump_adapt_PT_new <- function(y, x=1, b=NULL, nsamp=100, thin=1, burn=100,
       if(chain_ind == 1){
         Ntot <- random_walk_result$Ntot
         p_accept <- random_walk_result$p_accept
-        nacpt <- random_walk_result$nacpt
-        nacpt.bp <- random_walk_result$nacpt.bp
+        nacpt <- nacpt + random_walk_result$nacpt
+        nacpt.bp <- nacpt.bp + random_walk_result$nacpt.bp
       }
     }
     
@@ -2489,6 +2492,7 @@ bdregjump_adapt_PT_new <- function(y, x=1, b=NULL, nsamp=100, thin=1, burn=100,
       rho_adap_PT[l] <- rho_adap_PT[l] + gamma_adap * H_l
     }
     H_l.store[,count.store] <- H_l_all
+    rho_adap_PT.store[,count.store] <- rho_adap_PT
     
     if(print.process) print(iter)
     
@@ -2500,6 +2504,7 @@ bdregjump_adapt_PT_new <- function(y, x=1, b=NULL, nsamp=100, thin=1, burn=100,
               shapes=shapes.store, p_accept = p_accept.store,
               temp = temp_PT.store, swap_pos = swap_pos, swap_accept = swap_accept,
               log.likelihood_PT = log.likelihood_PT.store, H_l = H_l.store,
+              rho_adap_PT = rho_adap_PT.store,
               runtime=run.time, 
               acpt=c(a=nacpt, store=nacpt.bp, swap=nswap)/(burn+nsamp*thin))
   )
