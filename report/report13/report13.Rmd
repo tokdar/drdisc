@@ -1,0 +1,99 @@
+---
+title: "report13"
+author: "Haoliang Zheng"
+date: "2/15/2022"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "/Users/zhl/Desktop/drdisc")
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(fig.align = 'center', 
+                      fig.width=6, fig.height=7)
+
+library(abind)
+library(knitr)
+library(latex2exp)
+require(magrittr)
+require(plyr)
+library(tidyverse)
+library(coda)
+library(doParallel)
+library(doMC) 
+library(foreach)
+library(doRNG)
+
+adapt <- FALSE
+bunch <- FALSE
+N_para <- 6
+
+registerDoMC(6)
+
+par(mar = c(2,2,2,2))
+```
+
+The posterior distribution:
+$$
+\pi(a, \beta) = k^{-1} p(x | a)^\beta p(a)
+$$
+
+For Simulated Tempering, we are considering $(a, \beta_1) \rightarrow (a, \beta_2)$, then
+acceptance probability is:
+$$
+\alpha(1, 2) = 1 \wedge \frac{p(x | a)^{\beta_2} / c(\beta_2)}{p(x | a)^{\beta_1} / c(\beta_1)}
+$$
+
+For Parallel Tempering, we are considering $(a_1, \beta_1) (a_2, \beta_2) \rightarrow (a_2, \beta_1) (a_1, \beta_2)$, then swap probability is:
+$$
+\begin{aligned}
+\alpha(1, 2) &= 1 \wedge \frac{p(x | a_1)^{\beta_2} / c(\beta_2)}{p(x | a_1)^{\beta_1} / c(\beta_1)}
+\times \frac{p(x | a_2)^{\beta_1} / c(\beta_1)}{p(x | a_2)^{\beta_2} / c(\beta_2)} \\
+&= 1 \wedge \left(\frac{p(x | a_2)}{p(x | a_1)}\right)^{\beta_1 - \beta_2}
+\end{aligned}
+$$
+
+In our case, we are considering $((a_1,b_1), \beta_1) ((a_2,b_2), \beta_2) \rightarrow ((a_2,b_2), \beta_1) ((a_1,b_1), \beta_2)$, then swap probability should still be:
+$$
+\alpha(1, 2) = 1 \wedge \left(\frac{p(x | a_2, b_2)}{p(x | a_1, b_1)}\right)^{\beta_1 - \beta_2}
+$$
+
+Because we are computing likelihood with the following codes, this should be fine.
+```{r eval=FALSE}
+res <- pg.residual - xa * Half.comb
+log.likelihood <- sum(dnorm(res,0,sqrt(1/pg.draws),log=TRUE))
+```
+
+However, another question is: our model has the following form:
+$$
+f(y|x) = \frac{\Phi \big(\sum_{k=1}^K (x^T\beta_k) P_k(y) - (x^T \alpha)_{+} Q(y; \lambda) I(y > 0)\big)}{\int_{-1}^{1} \Phi \big(\sum_{k=1}^K (x^T\beta_k) P_k(y) - (x^T \alpha)_{+} Q(y; \lambda) I(y > 0)\big) \mathrm{d}t}, 
+\quad x \in \mathbb{R}^p, y \in (-1, 1),
+$$
+
+In `get.miss.reject.x()`, we have
+```{r eval=FALSE}
+w <- rowSums(x.remain * (pm %*% b)) + xa.remain*hk
+u <- (runif(n.remain) < Phi(w))
+w.miss <- c(w.miss, w[!u])
+```
+and
+```{r eval=FALSE}
+w.obs <- rowSums(x * (Poly.obs %*% b)) + xa.obs * Half.obs
+w.miss <- missing.stuff$w.miss
+w.comb <- c(w.obs, w.miss)
+pg.draws <- pmax(1e-12, rpg.devroye(Ntot, h=1, z=w.comb))
+pg.residual <- pg.resp - w.comb
+```
+
+Before, I only used `temp` when computing log.hastings.ratio for $a$ parameter,
+```{r eval=FALSE}
+log.hastings.ratio <- (temp * ( sum(dnorm(res.new,0,sqrt(1/pg.draws),log=TRUE)
+                                    - dnorm(res,0,sqrt(1/pg.draws),log=TRUE)) )
+                       + sum(dnorm(a.new,0,sqrt(1/hprec),log=TRUE)
+                             - dnorm(a,0,sqrt(1/hprec),log=TRUE)))
+```
+
+Should we add `temp` in the `get.miss.reject.x()` and `w.obs` to reflect
+different temperature configurations?

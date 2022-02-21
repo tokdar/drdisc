@@ -92,6 +92,9 @@ y.test <- 2*vote[-train.ss,"from_requirement_threshold"]
 
 bunch <- FALSE
 pos.est <- TRUE
+
+p <- 6
+order <- 15
 ```
 
 # Fix b
@@ -110,9 +113,6 @@ load("./report/report10/adapt_fixb.RData")
 ```
 
 ```{r fbp, cache=TRUE}
-p <- 6
-order <- 15
-
 adapt_fixb_coda <- multi_chain_coda(adapt_fixb, burn=2000, N_para, p, order)
 
 plot(adapt_fixb_coda)
