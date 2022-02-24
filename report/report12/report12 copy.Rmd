@@ -1,0 +1,409 @@
+---
+title: "report12"
+author: "Haoliang Zheng"
+date: "2/5/2022"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "/Users/zhl/Desktop/drdisc")
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(fig.align = 'center', 
+                      fig.width=6, fig.height=7)
+
+library(abind)
+library(knitr)
+library(latex2exp)
+require(magrittr)
+require(plyr)
+library(tidyverse)
+library(coda)
+library(doParallel)
+library(doMC) 
+library(foreach)
+library(doRNG)
+
+adapt <- FALSE
+bunch <- FALSE
+N_para <- 6
+
+registerDoMC(6)
+
+par(mar = c(2,2,2,2))
+```
+
+
+```{r source, include=FALSE}
+source("./codes/new-codes.R")
+source("./codes/test-codes.R")
+source("./codes/other-codes.R")
+
+multi_chain_coda_noa <- function(result_multi, burn = 1000, N_para, p, order){
+  coda_result <- list()
+  matrix_result <- NULL
+  for(i in 1:N_para){
+    matrix_result <- NULL
+    for(j in 1:order){
+      for(k in 1:p){
+        bijk <- matrix(result_multi[[i]]$b[j,k,], ncol = 1)
+        colnames(bijk) <- paste0("b",j,k)
+        matrix_result <- cbind(matrix_result, bijk)
+      }
+    }
+    coda_result[[i]] <- mcmc(matrix_result, start = burn+1)
+  }
+  coda_result_list <- mcmc.list(coda_result)
+  
+  return(coda_result_list)
+}
+
+para_temp_plot <- function(adapt_PT_new, L, N_para = 6){
+par(mar = c(2,2,2,2))
+par(mfrow = c(N_para, 1))
+for(i in 1:N_para){
+  plot(adapt_PT_new[[i]]$temp[1,], type = "l", ylim=range(adapt_PT_new[[i]]$temp),
+       main = paste0("starting point ", i))
+  for(j in 2:L){
+    lines(adapt_PT_new[[i]]$temp[j,], col=tcol(j,.5), lwd=2)
+    }
+  }
+}
+
+get.swap.ratio <- function(adapt_PT_new_rho, N_parallel = 6, L = 5){
+  result <- matrix(NA, N_para, L-1)
+  for(i in 1:N_para){
+    for(j in 1:(L-1)){
+      swap_ind <- (adapt_PT_new_rho[[i]]$swap_info[1,] == j)
+      result[i,j] <- mean(adapt_PT_new_rho[[i]]$swap_info[3,swap_ind])
+    }
+  }
+  return(result)
+}
+```
+
+# data
+
+```{r}
+vote <- read.csv("./codes/vote_data.csv")
+str(vote)
+vote <- subset(vote, abs(from_requirement_threshold) < 0.5)
+set.seed(1234)
+train.ss <- sample(nrow(vote), 15e3)
+
+preds <- model.matrix(~ #major.requirement 
+                        + ISS.against.recommendation 
+                      #+ shares.oustanding.base 
+                      #+ special.meeting 
+                      + analyst.coverage 
+                      #+ institutional.ownership 
+                      + past.stock.return 
+                      + q 
+                      + firm.size, 
+                      data = vote)[,-1]
+preds.train <- scale(preds[train.ss,])
+x <- cbind(1, preds.train)
+x.test <- cbind(1, scale(preds[-train.ss,],
+                         center=attr(preds.train,"scaled:center"),
+                         scale=attr(preds.train,"scaled:scale")))
+dimnames(x)[[2]][1] <- "Intercept"
+dimnames(x.test)[[2]][1] <- "Intercept"
+x.names <- dimnames(x)[[2]]
+
+y <- 2*vote[train.ss,"from_requirement_threshold"]
+y.test <- 2*vote[-train.ss,"from_requirement_threshold"]
+
+bunch <- FALSE
+pos.est <- TRUE
+```
+
+```{r}
+set.seed(123)
+N_para <- 6
+p <- 6
+order <- 15
+L <- 5
+
+kbw <- 2/(order-1)
+knots <- seq(-1,1,kbw)
+bsd.sq <- (0.67*kbw)^2
+gausskern <- lapply(knots, function(mu) return(function(x) return(exp(-0.5*(x-mu)^2/bsd.sq))))
+get.poly.mat <- function(y) return(sapply(gausskern, function(f) f(y)))
+
+yFn <- get.poly.mat
+
+b_init <- replicate(N_para, matrix(rnorm(n = order*p, sd=5), order, p))
+a_init <- replicate(N_para, rnorm(n = p, sd = 1.5))
+```
+
+# new rho, bdregjump_adapt_PT_new
+
+```{r ,eval=FALSE}
+adapt_PT_new_rho <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_PT_new(y=y, x=x, b=b_init[,,i], burn=0, nsamp=12000, thin=1, order = 15,
+                     jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.68, update.jbw=FALSE),
+                     adap=list(parallel = 5))
+```
+
+```{r}
+load("./report/report11/adapt_PT_new_rho.RData")
+```
+
+
+```{r plot1, cache=TRUE}
+adapt_PT_new_rho_coda <- multi_chain_parallel_coda(adapt_PT_new_rho, burn=0, N_para, p, order)
+
+plot(adapt_PT_new_rho_coda)
+```
+
+## swap and temp
+
+```{r}
+sapply(1:6, function(x) adapt_PT_new_rho[[x]]$acpt)[c(1,3),]
+```
+
+```{r}
+get.swap.ratio(adapt_PT_new_rho)
+```
+
+```{r}
+para_temp_plot(adapt_PT_new_rho, 5, N_para)
+```
+
+```{r}
+adapt_PT_new_rho[[1]]$H_l[,11951:12000]
+```
+
+# alpha_star_PT = 0.35
+
+```{r eval=FALSE}
+adapt_PT_new_rho4 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_PT_new(y=y, x=x, b=b_init[,,i], burn=0, nsamp=8000, thin=1, order = 15,
+                     jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.68, update.jbw=FALSE),
+                     adap=list(parallel = 5, alpha_star_PT = 0.35))
+```
+
+```{r}
+load("./report/report12/adapt_PT_new_rho4.RData")
+```
+
+```{r plot2, cache=TRUE}
+adapt_PT_new_rho4_coda <- multi_chain_parallel_coda(adapt_PT_new_rho4, burn=0, N_para, p, order)
+
+plot(adapt_PT_new_rho4_coda)
+```
+
+## swap and temp
+
+```{r}
+sapply(1:6, function(x) adapt_PT_new_rho4[[x]]$acpt)[c(1,3),]
+```
+
+```{r}
+get.swap.ratio(adapt_PT_new_rho4)
+```
+
+
+```{r}
+para_temp_plot(adapt_PT_new_rho4, 5, N_para)
+```
+
+
+```{r}
+adapt_PT_new_rho4[[1]]$H_l[,7951:8000]
+```
+
+# alpha_star_PT = 0.375
+
+```{r eval=FALSE}
+adapt_PT_new_rho6 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_PT_new(y=y, x=x, b=b_init[,,i], burn=0, nsamp=8000, thin=1, order = 15,
+                     jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.68, update.jbw=FALSE),
+                     adap=list(parallel = 5, alpha_star_PT = 0.375))
+```
+
+```{r}
+load("./report/report12/adapt_PT_new_rho6.RData")
+```
+
+```{r plot3, cache=TRUE}
+adapt_PT_new_rho6_coda <- multi_chain_parallel_coda(adapt_PT_new_rho6, burn=0, N_para, p, order)
+
+plot(adapt_PT_new_rho6_coda)
+```
+
+## swap and temp
+
+```{r}
+sapply(1:6, function(x) adapt_PT_new_rho6[[x]]$acpt)[c(1,3),]
+```
+
+```{r}
+get.swap.ratio(adapt_PT_new_rho6)
+```
+
+
+```{r}
+para_temp_plot(adapt_PT_new_rho6, 5, N_para)
+```
+
+
+```{r}
+adapt_PT_new_rho6[[1]]$H_l[,7951:8000]
+```
+
+# alpha_star_PT = 0.4
+
+```{r eval=FALSE}
+adapt_PT_new_rho3 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_PT_new(y=y, x=x, b=b_init[,,i], burn=0, nsamp=8000, thin=1, order = 15,
+                     jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.68, update.jbw=FALSE),
+                     adap=list(parallel = 5, alpha_star_PT = 0.4))
+```
+
+```{r}
+load("./report/report12/adapt_PT_new_rho3.RData")
+```
+
+```{r plot4, cache=TRUE}
+adapt_PT_new_rho3_coda <- multi_chain_parallel_coda(adapt_PT_new_rho3, burn=0, N_para, p, order)
+
+plot(adapt_PT_new_rho3_coda)
+```
+
+## swap and temp
+
+```{r}
+sapply(1:6, function(x) adapt_PT_new_rho3[[x]]$acpt)[c(1,3),]
+```
+
+```{r}
+get.swap.ratio(adapt_PT_new_rho3)
+```
+
+
+```{r}
+para_temp_plot(adapt_PT_new_rho3, 5, N_para)
+```
+
+```{r}
+adapt_PT_new_rho3[[1]]$H_l[,7951:8000]
+```
+
+# alpha_star_PT = 0.45
+
+```{r eval=FALSE}
+adapt_PT_new_rho5 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_PT_new(y=y, x=x, b=b_init[,,i], burn=0, nsamp=8000, thin=1, order = 15,
+                     jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.68, update.jbw=FALSE),
+                     adap=list(parallel = 5, alpha_star_PT = 0.45))
+```
+
+```{r}
+load("./report/report12/adapt_PT_new_rho5.RData")
+```
+
+```{r plot5, cache=TRUE}
+adapt_PT_new_rho5_coda <- multi_chain_parallel_coda(adapt_PT_new_rho5, burn=0, N_para, p, order)
+
+plot(adapt_PT_new_rho5_coda)
+```
+
+## swap and temp
+
+```{r}
+sapply(1:6, function(x) adapt_PT_new_rho5[[x]]$acpt)[c(1,3),]
+```
+
+```{r}
+get.swap.ratio(adapt_PT_new_rho5)
+```
+
+
+```{r}
+para_temp_plot(adapt_PT_new_rho5, 5, N_para)
+```
+
+
+```{r}
+adapt_PT_new_rho5[[1]]$H_l[,7951:8000]
+```
+
+
+# alpha_star_PT = 0.5
+
+```{r eval=FALSE}
+adapt_PT_new_rho2 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_PT_new(y=y, x=x, b=b_init[,,i], burn=0, nsamp=12000, thin=1, order = 15,
+                     jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.68, update.jbw=FALSE),
+                     adap=list(parallel = 5, alpha_star_PT = 0.5))
+```
+
+```{r}
+load("./report/report12/adapt_PT_new_rho2.RData")
+```
+
+```{r plotf, cache=TRUE}
+adapt_PT_new_rho2_coda <- multi_chain_parallel_coda(adapt_PT_new_rho2, burn=0, N_para, p, order)
+
+plot(adapt_PT_new_rho2_coda)
+```
+
+## swap and temp
+
+```{r}
+sapply(1:6, function(x) adapt_PT_new_rho2[[x]]$acpt)[c(1,3),]
+```
+
+```{r}
+get.swap.ratio(adapt_PT_new_rho2)
+```
+
+
+```{r}
+para_temp_plot(adapt_PT_new_rho2, 5, N_para)
+```
+
+
+```{r}
+adapt_PT_new_rho2[[1]]$H_l[,11951:12000]
+```
+
+# precision matrix structure
+
+```{r}
+r <- 0.8
+hhhh <- matrix(1:order, order, order)
+jjj <- abs(hhhh - t(hhhh))
+R = r^jjj
+R
+prec_matrix <- solve(R)
+```
+
+
+```{r ,eval=FALSE}
+adapt_prec_mat <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_precmat(y=y, x=x, b=b_init[,,i], prec_mat = prec_matrix,
+                          burn=0, nsamp=12000, thin=1, order = 15,
+                     jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.68, update.jbw=FALSE))
+```
+
+```{r}
+load("./report/report12/adapt_prec_mat.RData")
+```
+
+```{r precmat1, cache=TRUE}
+adapt_prec_mat_coda <- multi_chain_coda(adapt_prec_mat, burn=0, N_para, p, order)
+
+plot(adapt_prec_mat_coda)
+```
+

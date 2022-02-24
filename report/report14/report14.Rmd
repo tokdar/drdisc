@@ -247,6 +247,7 @@ para_temp_plot(adapt_tempered_onehis, 5, N_para)
 y=y
 x=x
 b=b_init[,,1]
+shapes=c(1,1)
 burn=0
 nsamp=5000
 thin=1
@@ -272,7 +273,6 @@ if(is.null(b)) b <- replicate(p, rep(0,order))
 b <- matrix(b, order, p)
 b_PT <- replicate(L, b)
 if(length(prec) < p) prec <- rep(prec, p)[1:p]
-shapes=c(1,1)
 shapes.bp <- c(qlogis(shapes[1]/sum(shapes)), sum(shapes))
 shapes_PT <- replicate(L, shapes)
 
@@ -659,3 +659,655 @@ for(i in 1:15){
 
 ```
 
+# bdregjump_adapt_tempered_new
+
+```{r eval=FALSE}
+adapt_tempered_new <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_tempered(y=y, x=x, b=b_init[,,i], burn=0, nsamp=5000, thin=1, order = 15,
+                     jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.68, update.jbw=FALSE),
+                     adap=list(parallel = 5, alpha_star_PT = 0.234))
+```
+
+```{r}
+save(adapt_tempered_new, y, x, b_init, a_init, order,
+     file = "./report/report14/adapt_tempered_new.RData")
+```
+
+```{r}
+p_h <- 1
+l_h <- 2
+plot(adapt_tempered_new[[1]]$a_PT[p_h,l_h,], type = "l", ylim = c(-2, 4),
+     main="Traceplot: a", xlab="MCMC iteration", ylab="Posterior draw")
+for(i in 2:N_para) lines(adapt_tempered_new[[i]]$a_PT[p_h,l_h,], col=tcol(i,.5), lwd=2)
+```
+
+
+```{r}
+p_h <- 1
+l_h <- 1
+plot(adapt_tempered_new[[1]]$a_PT[p_h,l_h,], type = "l", ylim = c(-2, 4),
+     main="Traceplot: a", xlab="MCMC iteration", ylab="Posterior draw")
+for(i in 2:N_para) lines(adapt_tempered_new[[i]]$a_PT[p_h,l_h,], col=tcol(i,.5), lwd=2)
+```
+
+```{r}
+l_h <- 5
+for(p_h in 1:6){
+plot(adapt_tempered_new[[1]]$a_PT[p_h,l_h,], type = "l", ylim = c(-2, 4),
+     main="Traceplot: a", xlab="MCMC iteration", ylab="Posterior draw")
+for(i in 2:N_para) lines(adapt_tempered_new[[i]]$a_PT[p_h,l_h,], col=tcol(i,.5), lwd=2)
+}
+```
+
+```{r}
+adapt_tempered_new_coda <- multi_chain_parallel_coda(adapt_tempered_new, burn=0, N_para, p, order)
+
+plot(adapt_tempered_new_coda)
+```
+
+```{r}
+sapply(1:6, function(x) adapt_tempered_new[[x]]$acpt)[c(1,3),]
+```
+
+```{r}
+get.swap.ratio(adapt_tempered_new)
+```
+
+```{r}
+para_temp_plot(adapt_tempered_new, 5, N_para)
+```
+
+## run
+
+```{r}
+y=y
+x=x
+b=b_init[,,1]
+shapes=c(1,1)
+prec=1
+burn=0
+nsamp=5000
+thin=1
+order = 15
+jump=list(a=a_init[,1], prec = 1, positive=pos.est,
+          persistence=0.68, update.jbw=FALSE)
+adap=list(parallel = 5, alpha_star_PT = 0.234)
+print.process = TRUE
+
+L <- adap$parallel
+if(is.null(L)) L <- 5
+
+kbw <- 2/(order-1)
+knots <- seq(-1,1,kbw)
+bsd.sq <- (0.67*kbw)^2
+gausskern <- lapply(knots, function(mu) return(function(x) return(exp(-0.5*(x-mu)^2/bsd.sq))))
+get.poly.mat <- function(y) return(sapply(gausskern, function(f) f(y)))
+
+n <- length(y)
+if(is.null(dim(x))) x <- matrix(x, nrow=n)
+p <- ncol(x)
+if(is.null(b)) b <- replicate(p, rep(0,order))
+b <- matrix(b, order, p)
+b_PT <- replicate(L, b)
+if(length(prec) < p) prec <- rep(prec, p)[1:p]
+shapes.bp <- c(qlogis(shapes[1]/sum(shapes)), sum(shapes))
+shapes_PT <- replicate(L, shapes)
+
+a <- jump$a
+a_PT <- replicate(L, a)
+if(is.null(a)){
+  a <- rep(0, p)
+  a_PT <- replicate(L, rep(0, p))
+}
+persistence <- jump$persistence
+if(is.null(persistence)) persistence <- 0.5
+jbw <- 0.16*2*persistence
+jbw_PT <- rep(jbw, L)
+positive <- jump$positive
+if(is.null(positive)) positive <- TRUE
+hprec <- jump$prec
+if(is.null(hprec)) hprec <- 1
+ncand <- jump$ncand
+if(is.null(ncand)) ncand <- 10
+update.jbw <- jump$update.jbw
+if(is.null(update.jbw)) update.jbw <- TRUE
+
+loglambda_adap_PT <- rep(log(2.38^2/p), L)
+
+mu_adap <- adap$mu_adap
+mu_adap_PT <- replicate(L, mu_adap)
+if(is.null(mu_adap)){
+  mu_adap <- rep(0,p)
+  mu_adap_PT <- replicate(L, rep(0,p))
+}
+Sigma_adap <- adap$Sigma_adap
+Sigma_adap_PT <- replicate(L, Sigma_adap)
+if(is.null(Sigma_adap)){
+  Sigma_adap <- diag(p)
+  Sigma_adap_PT <- replicate(L, diag(p))
+} 
+
+rho_adap <- adap$rho_adap
+rho_adap_PT <- rep(rho_adap, L-1)
+if(is.null(rho_adap)){
+  rho_adap <- 1
+  rho_adap_PT <- rep(1, L-1)
+}
+
+alpha_star <- adap$alpha_star
+if(is.null(alpha_star)) alpha_star <- 0.234
+alpha_star_PT <- adap$alpha_star_PT
+if(is.null(alpha_star_PT)) alpha_star_PT <- 0.234
+r_adap <- adap$r_adap
+if(is.null(r_adap)) r_adap <- 2/3
+chol.pivot <- adap$chol.pivot
+if(is.null(chol.pivot)) chol.pivot <- FALSE
+
+log.likelihood_PT <- rep(NA, L)
+
+Poly.obs <- get.poly.mat(y)
+b.store <- array(NA, dim=c(order, p, nsamp))
+a_PT.store <- array(NA, dim=c(p, L, nsamp))
+jbw.store <- rep(NA, nsamp)
+Ntot.store <- rep(NA, nsamp)
+shapes.store <- matrix(NA, 2, nsamp)
+Sigma_adap.store <- array(NA, dim=c(p, p, nsamp))
+loglambda_adap.store <- rep(NA, nsamp)
+p_accept.store <- rep(NA, nsamp)
+temp_PT.store <- matrix(NA, L, nsamp)
+log.likelihood_PT.store <- matrix(NA, L, nsamp)
+H_l_all <- rep(NA, L-1)
+H_l.store <- matrix(NA, L-1, nsamp)
+rho_adap_PT.store <- matrix(NA, L-1, nsamp)
+
+swap_info.store <- matrix(NA, 3, nsamp)
+
+count.store <- 0
+nacpt <- 0
+nacpt.bp <- 0
+nswap <- 0
+swap_pos <- NULL
+swap_accept <- NULL
+bp.df <- 6
+az.new <- rep(0,p)
+
+config_info_all <- list()
+swap_accept_prob <- rep(NA, L-1)
+swap_accept_prob.store <- matrix(NA, L-1, nsamp)
+```
+
+```{r}
+################### get.miss.reject.x ###################
+yFn <- get.poly.mat
+
+get.miss.reject.x <- function(b, n, x, a, shapes=c(1,1), jbw=0.16, positive=TRUE,
+                              temp){
+  n.hits <- 0
+  n.miss <- 0
+  Poly.miss <- NULL
+  Half.miss <- NULL
+  w.miss <- NULL
+  x.miss <- NULL
+  y.miss <- NULL
+  
+  xa <- c(x %*% a)
+  if(positive) xa <- pmax(0, xa)
+  
+  n.remain <- n
+  ix.remain <- 1:n
+  while(n.remain > 0){
+    z <- 2*rbeta(n.remain, shapes[1],shapes[2])-1
+    pm <- matrix(yFn(z), nrow=n.remain)
+    hk <- half.kern(z,jbw)
+    x.remain <- x[ix.remain,,drop=FALSE]
+    xa.remain <- xa[ix.remain]
+    w <- temp * (rowSums(x.remain * (pm %*% b)) + xa.remain*hk)
+    u <- (runif(n.remain) < Phi(w))
+    n.reject <- sum(!u)
+    if(n.reject > 0){
+      Poly.miss <- rbind(Poly.miss, pm[!u,])
+      Half.miss <- c(Half.miss, hk[!u])
+      w.miss <- c(w.miss, w[!u])
+      x.miss <- rbind(x.miss, x.remain[!u,,drop=FALSE])
+      y.miss <- c(y.miss, z[!u])
+    }
+    n.remain <- n.reject
+    ix.remain <- ix.remain[!u]
+    n.miss <- n.miss + n.reject
+  }
+  return(list(Poly.miss=as.matrix(Poly.miss), Half.miss=Half.miss, 
+              w.miss=w.miss, n.miss=n.miss, x.miss=x.miss, y.miss=y.miss))
+}
+```
+
+```{r}
+################### random_walk_step ###################
+random_walk_step <- function(y, x, prec, hprec, n, ncand, temp, Poly.obs,
+                             positive = TRUE, alpha_star, r_adap, chol.pivot, 
+                             b, a, shapes, jbw, update.jbw,
+                             gamma_adap, loglambda_adap, mu_adap, Sigma_adap){
+  nacpt <- 0
+  nacpt.bp <- 0
+  
+  Half.obs <- half.kern(y, jbw)
+  xa.obs <- c(x %*% a)
+  if(positive) xa.obs <- pmax(0, xa.obs)
+  
+  w.obs <- temp * (rowSums(x * (Poly.obs %*% b)) + xa.obs * Half.obs)
+  
+  missing.stuff <- get.miss.reject.x(b, n, x, a, shapes, jbw, positive, temp)
+  n.miss <- missing.stuff$n.miss
+  Poly.miss <- missing.stuff$Poly.miss
+  Half.miss <- missing.stuff$Half.miss
+  w.miss <- missing.stuff$w.miss
+  x.miss <- missing.stuff$x.miss
+  y.miss <- missing.stuff$y.miss
+  
+  if(sum(y.miss==-1) > 0) y.miss[y.miss==-1] <- (-1 + 1e-10)
+  if(sum(y.miss==1) > 0) y.miss[y.miss==1] <- (1 - 1e-10)
+  
+  Ntot <- n + n.miss  
+  
+  Poly.comb <- rbind(Poly.obs, Poly.miss)
+  Half.comb <- c(Half.obs, Half.miss)
+  w.comb <- c(w.obs, w.miss)
+  x.comb <- rbind(x, x.miss)
+  y.comb <- c(y, y.miss)
+  
+  u.comb <- rep(c(1,0), c(n, n.miss))
+  pg.draws <- pmax(1e-12, rpg.devroye(Ntot, h=1, z=w.comb))
+  pg.resp <- (u.comb - 0.5)/pg.draws
+  pg.residual <- pg.resp - w.comb
+  
+  ## update b
+  for(j in 1:p){
+    xPoly.j <- temp * x.comb[,j] * Poly.comb
+    pg.residual <- pg.residual + c(xPoly.j %*% b[,j])
+    
+    Yw <- pg.residual * sqrt(pg.draws)
+    Xw <- xPoly.j * sqrt(pg.draws)
+    Uw <- chol(crossprod(Xw) + diag(prec[j],order))
+    b[,j] <- c(backsolve(Uw, backsolve(Uw, crossprod(Xw,Yw), transpose=TRUE) + rnorm(order)))
+    if(any(is.na(b[,j]))) stop("NAs in b")
+    pg.residual <- pg.residual - c(xPoly.j %*% b[,j])
+  }
+  
+  ## update a
+  xa <- temp * c(x.comb %*% a)
+  if(positive) xa <- pmax(0, xa)
+  
+  pg.residual <- pg.residual + xa * Half.comb
+  
+  Sigma_chol <- exp(loglambda_adap/2) * chol(Sigma_adap + diag(1e-10, p), pivot = chol.pivot)
+  if(chol.pivot == TRUE){
+    var_order <- attr(Sigma_chol, "pivot")
+    az.new[var_order] <- crossprod(Sigma_chol, rnorm(p))
+  } else{
+    az.new <- crossprod(Sigma_chol, rnorm(p))
+  }
+  
+  a.new <- a + az.new
+  xa.new <- temp * c(x.comb %*% a.new)
+  if(positive) xa.new <- pmax(0, xa.new)
+  
+  res.new <- pg.residual - xa.new * Half.comb
+  res <- pg.residual - xa * Half.comb
+  log.hastings.ratio <- ( sum(dnorm(res.new,0,sqrt(1/pg.draws),log=TRUE)
+                              - dnorm(res,0,sqrt(1/pg.draws),log=TRUE))
+                          + sum(dnorm(a.new,0,sqrt(1/hprec),log=TRUE)
+                                - dnorm(a,0,sqrt(1/hprec),log=TRUE)) )
+  
+  if(log(runif(1)) < log.hastings.ratio){
+    a <- a.new
+    xa <- xa.new
+    nacpt <- 1
+    log.likelihood <- sum(dnorm(res.new,0,sqrt(1/pg.draws),log=TRUE))
+  } else{
+    log.likelihood <- sum(dnorm(res,0,sqrt(1/pg.draws),log=TRUE))
+  }
+  p_accept <- min(1, exp(log.hastings.ratio))
+  
+  loglambda_adap <- loglambda_adap + gamma_adap * (p_accept - alpha_star)
+  a_mu_diff <- a - mu_adap
+  mu_adap <- mu_adap + gamma_adap * a_mu_diff
+  Sigma_adap <- Sigma_adap + gamma_adap*(tcrossprod(a_mu_diff, a_mu_diff) - Sigma_adap)
+  
+  pg.residual <- pg.residual - xa * Half.comb
+  
+  ## update jbw
+  if(update.jbw){
+    persistence.cand <- rprior.persistence(ncand)
+    jbw.cand <- 2*0.16*persistence.cand
+    Half.comb.cand <- sapply(jbw.cand, function(bw) half.kern(y.comb, bw))
+    res.cand <- pg.residual + temp * (xa * Half.comb - xa * Half.comb.cand)
+    lp0 <- dnorm(pg.residual,0,sqrt(1/pg.draws),log=TRUE)
+    lp.cand <- c(apply(res.cand, 
+                       2, 
+                       function(res) sum(dnorm(res,0,sqrt(1/pg.draws),log=TRUE) - lp0)), 
+                 0)
+    cand.draw <- sample(ncand+1,1,prob=exp(lp.cand - logsum(lp.cand)))
+    if(cand.draw < ncand+1) jbw <- jbw.cand[cand.draw]
+  }    
+  
+  ## update beta shapes
+  beta.y <- (1+y.comb)/2
+  oo <- betapost.norm.approx(beta.y)
+  bp.hat <- oo$mean
+  bp.R <- oo$half.var
+  bp.z <- backsolve(bp.R, shapes.bp - bp.hat, transpose=TRUE)
+  cont <- TRUE
+  while(cont){
+    bp.znew <- rnorm(2)/sqrt(rgamma(1,bp.df/2,bp.df/2))
+    bp.new <- bp.hat+c(crossprod(bp.R, bp.znew))
+    cont <- bp.new[2] < 0
+  }
+  ll.diff <- beta.loglik2(bp.new, beta.y) - beta.loglik2(shapes.bp, beta.y)
+  log.hastings <- ll.diff + 0.5*(2+bp.df)*(log1p(sum(bp.znew^2)/bp.df) - log1p(sum(bp.z^2)/bp.df))
+  
+  if(log(runif(1)) < log.hastings){
+    shapes.bp <- bp.new
+    nacpt.bp <- 1
+  }
+  shapes <- shapes.bp[2]*plogis(shapes.bp[1]*c(-1,1))
+  
+  config_info <- list(pg.residual = pg.residual, x.comb = x.comb,
+                      Half.comb = Half.comb, pg.draws = pg.draws,
+                      Poly.comb = Poly.comb)
+  
+  return(list(b = b, a = a, shapes = shapes, jbw = jbw, log.likelihood = log.likelihood,
+              loglambda_adap = loglambda_adap, mu_adap = mu_adap, Sigma_adap = Sigma_adap,
+              Ntot = Ntot, p_accept = p_accept, nacpt = nacpt, nacpt.bp = nacpt.bp,
+              config_info = config_info))
+}
+```
+
+```{r}
+################### swap likelihood ###################
+get.swap.likelihood <-  function(temp, 
+                                 pg.residual_old, x.comb_old, Half.comb_old,
+                                 pg.draws_old, Poly.comb_old,
+                                 b_old, b_new,
+                                 a_old, a_new, positive=TRUE){
+  ## update b
+  pg.residual_old <- pg.residual_old + temp * rowSums(x.comb_old * (Poly.comb_old %*% b_old))
+  pg.residual_old <- pg.residual_old - temp * rowSums(x.comb_old * (Poly.comb_old %*% b_new))
+
+  ## update a
+  xa_old <- c(x.comb_old %*% a_old)
+  if(positive) xa_old <- pmax(0, xa_old)
+  xa_new <- c(x.comb_old %*% a_new)
+  if(positive) xa_new <- pmax(0, xa_new)
+  
+  pg.residual_old <- pg.residual_old + temp * xa_old * Half.comb_old
+  res_new <- pg.residual_old - temp * xa_new * Half.comb_old
+  log.likelihood <- sum(dnorm(res_new,0,sqrt(1/pg.draws_old),log=TRUE))
+  
+  return(log.likelihood)
+}
+```
+
+```{r}
+for(iter in -(burn-1):(nsamp*thin)){
+  
+  iter_pos <- iter + burn
+  gamma_adap <- min(0.5, 1/(iter_pos^r_adap))
+  temp_PT <- 1 / cumsum(exp(c(0, rho_adap_PT)))
+  print(temp_PT)
+  
+  for(chain_ind in 1:L){
+    random_walk_result <- random_walk_step(y=y, x=x, prec=prec, hprec=hprec, Poly.obs = Poly.obs,
+                                           n=n, ncand=ncand, temp = temp_PT[chain_ind],
+                                           positive=positive, alpha_star=alpha_star,
+                                           r_adap=r_adap, chol.pivot=chol.pivot, 
+                                           b=b_PT[,,chain_ind], a=a_PT[,chain_ind],
+                                           shapes=shapes_PT[,chain_ind], 
+                                           jbw=jbw_PT[chain_ind], update.jbw=update.jbw,
+                                           gamma_adap=gamma_adap,
+                                           loglambda_adap=loglambda_adap_PT[chain_ind],
+                                           mu_adap=mu_adap_PT[,chain_ind], 
+                                           Sigma_adap=Sigma_adap_PT[,,chain_ind])
+    b_PT[,,chain_ind] <- random_walk_result$b
+    a_PT[,chain_ind] <- random_walk_result$a
+    shapes_PT[,chain_ind] <- random_walk_result$shapes
+    jbw_PT[chain_ind] <- random_walk_result$jbw
+    log.likelihood_PT[chain_ind] <- random_walk_result$log.likelihood
+    loglambda_adap_PT[chain_ind] <- random_walk_result$loglambda_adap
+    mu_adap_PT[,chain_ind] <- random_walk_result$mu_adap
+    Sigma_adap_PT[,,chain_ind] <- random_walk_result$Sigma_adap
+    
+    config_info_all[[chain_ind]] <- random_walk_result$config_info
+    
+    if(chain_ind == 1){
+      Ntot <- random_walk_result$Ntot
+      p_accept <- random_walk_result$p_accept
+      nacpt <- nacpt + random_walk_result$nacpt
+      nacpt.bp <- nacpt.bp + random_walk_result$nacpt.bp
+    }
+  }
+  
+  if(iter > 0 & (iter %% thin == 0)){
+    count.store <- count.store + 1
+    b.store[,,count.store] <- b_PT[,,1]
+    a_PT.store[,,count.store] <- a_PT
+    jbw.store[count.store] <- jbw_PT[1]
+    Ntot.store[count.store] <- Ntot
+    shapes.store[,count.store] <- shapes_PT[,1]
+    Sigma_adap.store[,,count.store] <- Sigma_adap_PT[,,1]
+    loglambda_adap.store[count.store] <- loglambda_adap_PT[1]
+    p_accept.store[count.store] <- p_accept
+    temp_PT.store[,count.store] <- temp_PT
+    log.likelihood_PT.store[,count.store] <- log.likelihood_PT
+  }
+  
+  ## likelihood ratio
+  
+  for(l in 1:(L-1)){
+    config_info1 <- config_info_all[[l]]
+    config_info2 <- config_info_all[[l+1]]
+    
+    loglike12 <- get.swap.likelihood(temp=temp_PT[l],
+                                     pg.residual_old=config_info1$pg.residual,
+                                     x.comb_old=config_info1$x.comb,
+                                     Half.comb_old=config_info1$Half.comb,
+                                     pg.draws_old=config_info1$pg.draws,
+                                     Poly.comb_old=config_info1$Poly.comb,
+                                     b_old=b_PT[,,l], b_new=b_PT[,,(l+1)],
+                                     a_old=a_PT[,l], a_new=a_PT[,(l+1)], positive)
+    loglike21 <- get.swap.likelihood(temp=temp_PT[l+1],
+                                     pg.residual_old=config_info2$pg.residual,
+                                     x.comb_old=config_info2$x.comb,
+                                     Half.comb_old=config_info2$Half.comb,
+                                     pg.draws_old=config_info2$pg.draws,
+                                     Poly.comb_old=config_info2$Poly.comb,
+                                     b_old=b_PT[,,(l+1)], b_new=b_PT[,,l],
+                                     a_old=a_PT[,(l+1)], a_new=a_PT[,l], positive)
+    
+    loglikeratio <- (loglike12 + loglike21 - log.likelihood_PT[l] - log.likelihood_PT[l+1])
+    print(c(loglike12 - log.likelihood_PT[l], loglike21 - log.likelihood_PT[l+1]))
+    swap_accept_prob[l] <- min(1, exp(loglikeratio))
+  }
+  print(swap_accept_prob)
+  
+  ## swap
+  
+  swap_ind <- sample(1:(L-1), 1)
+  swap_tf <- FALSE
+  swap_accept <- swap_accept_prob[swap_ind]
+  
+  if(runif(1) < swap_accept){
+    swap_tf <- TRUE
+    
+    b_PT_s <- b_PT[,,swap_ind]
+    a_PT_s <- a_PT[,swap_ind]
+    jbw_PT_s <- jbw_PT[swap_ind]
+    shapes_PT_s <- shapes_PT[,swap_ind]
+    
+    b_PT[,,swap_ind] <- b_PT[,,swap_ind+1]
+    a_PT[,swap_ind] <- a_PT[,swap_ind+1]
+    jbw_PT[swap_ind] <- jbw_PT[swap_ind+1]
+    shapes_PT[,swap_ind] <- shapes_PT[,swap_ind+1]
+    
+    b_PT[,,swap_ind+1] <- b_PT_s
+    a_PT[,swap_ind+1] <- a_PT_s
+    jbw_PT[swap_ind+1] <- jbw_PT_s
+    shapes_PT[,swap_ind+1] <- shapes_PT_s
+    
+    nswap <- nswap+1
+    if(swap_ind == 1){
+      swap_pos <- c(swap_pos, iter)
+    }
+  }
+  
+  ## update rho
+  
+  for(l in 1:(L-1)){
+    H_l <- swap_accept_prob[l] - alpha_star_PT
+    H_l_all[l] <- H_l
+    rho_adap_PT[l] <- rho_adap_PT[l] + gamma_adap * H_l
+  }
+  
+  if(iter > 0 & (iter %% thin == 0)){
+    swap_info.store[1,count.store] <- swap_ind
+    swap_info.store[2,count.store] <- swap_accept
+    swap_info.store[3,count.store] <- swap_tf
+    H_l.store[,count.store] <- H_l_all
+    rho_adap_PT.store[,count.store] <- rho_adap_PT
+    swap_accept_prob.store[,count.store] <- swap_accept_prob
+  }
+  
+  if(print.process) print(iter)
+  
+}
+```
+
+# bdregjump_tempered_adapt
+
+## 05
+
+```{r eval=FALSE}
+tempered_adapt05 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_tempered_adapt(y=y, x=x, b=b_init[,,i], burn=0, nsamp=5000, thin=1,
+                           order = 15, temp = 0.5,
+                     jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.68, update.jbw=FALSE))
+```
+
+```{r}
+save(tempered_adapt05, y, x, b_init, a_init, order,
+     file = "./report/report14/tempered_adapt05.RData")
+```
+
+```{r}
+tempered_adapt05_coda <- multi_chain_coda(tempered_adapt05, burn=0, N_para, p, order)
+
+plot(tempered_adapt05_coda)
+```
+
+```{r}
+sapply(1:6, function(x) tempered_adapt05[[x]]$acpt)
+```
+
+
+## 01
+
+```{r eval=FALSE}
+tempered_adapt01 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_tempered_adapt(y=y, x=x, b=b_init[,,i], burn=0, nsamp=5000, thin=1,
+                           order = 15, temp = 0.1,
+                     jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.68, update.jbw=FALSE))
+```
+
+```{r}
+save(tempered_adapt01, y, x, b_init, a_init, order,
+     file = "./report/report14/tempered_adapt01.RData")
+```
+
+```{r}
+tempered_adapt01_coda <- multi_chain_coda(tempered_adapt01, burn=0, N_para, p, order)
+
+plot(tempered_adapt01_coda)
+```
+
+```{r}
+sapply(1:6, function(x) tempered_adapt01[[x]]$acpt)
+```
+
+
+## 025
+
+```{r eval=FALSE}
+tempered_adapt025 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_tempered_adapt(y=y, x=x, b=b_init[,,i], burn=0, nsamp=5000, thin=1,
+                           order = 15, temp = 0.25,
+                     jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.68, update.jbw=FALSE))
+```
+
+```{r}
+save(tempered_adapt025, y, x, b_init, a_init, order,
+     file = "./report/report14/tempered_adapt025.RData")
+```
+
+```{r}
+tempered_adapt025_coda <- multi_chain_coda(tempered_adapt025, burn=0, N_para, p, order)
+
+plot(tempered_adapt025_coda)
+```
+
+```{r}
+sapply(1:6, function(x) tempered_adapt025[[x]]$acpt)
+```
+
+
+## 035
+
+```{r eval=FALSE}
+tempered_adapt035 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_tempered_adapt(y=y, x=x, b=b_init[,,i], burn=0, nsamp=5000, thin=1,
+                           order = 15, temp = 0.35,
+                     jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.68, update.jbw=FALSE))
+```
+
+```{r}
+save(tempered_adapt035, y, x, b_init, a_init, order,
+     file = "./report/report14/tempered_adapt035.RData")
+```
+
+```{r}
+tempered_adapt035_coda <- multi_chain_coda(tempered_adapt035, burn=0, N_para, p, order)
+
+plot(tempered_adapt035_coda)
+```
+
+```{r}
+sapply(1:6, function(x) tempered_adapt035[[x]]$acpt)
+```
+
+
+## adapt_diffseed
+
+```{r eval=FALSE}
+adapt_diffseed <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt(y=y, x=x, b=b_init[,,1], burn=0, nsamp=12000, thin=1,
+                           order = 15,
+                     jump=list(a=a_init[,1], prec = 1, positive=pos.est,
+                               persistence=0.68, update.jbw=FALSE))
+```
+
+```{r}
+save(adapt_diffseed, y, x, b_init, a_init, order,
+     file = "./report/report14/adapt_diffseed.RData")
+```
+
+```{r}
+adapt_diffseed_coda <- multi_chain_coda(adapt_diffseed, burn=0, N_para, p, order)
+
+plot(adapt_diffseed_coda)
+```
+
+```{r}
+sapply(1:6, function(x) adapt_diffseed[[x]]$acpt)
+```
