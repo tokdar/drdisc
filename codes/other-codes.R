@@ -270,3 +270,14 @@ real_data_plot <- function(fit.x, x, x.test, y.test, yFn){
     text(-1, ylim[2]*0.9, bquote('Drop%'==.(drop.est)[paste("[",.(drop.ci[1]),",",.(drop.ci[2]),"]")]), pos=4)
   }
 }
+
+get.swap.ratio <- function(adapt_PT_new_rho, N_parallel = 6, L = 5){
+  result <- matrix(NA, N_para, L-1)
+  for(i in 1:N_para){
+    for(j in 1:(L-1)){
+      swap_ind <- (adapt_PT_new_rho[[i]]$swap_info[1,] == j)
+      result[i,j] <- mean(adapt_PT_new_rho[[i]]$swap_info[3,swap_ind])
+    }
+  }
+  return(result)
+}
