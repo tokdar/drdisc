@@ -20,46 +20,92 @@ latex_matrix_display <- function(result, N_para, nsamp){
 }
 
 
-multi_chain_coda <- function(result_multi, burn = 1000, N_para, p, order){
+multi_chain_coda <- function(result_multi, burn = 1000, N_para, p, order, moreburn = 0){
+  nlast <- length(result_multi[[1]]$b[1,1,])
   coda_result <- list()
   matrix_result <- NULL
   for(i in 1:N_para){
     matrix_result <- NULL
     for(j in 1:order){
       for(k in 1:p){
-        bijk <- matrix(result_multi[[i]]$b[j,k,], ncol = 1)
+        bijk <- matrix(result_multi[[i]]$b[j,k,(moreburn+1):nlast], ncol = 1)
         colnames(bijk) <- paste0("b",j,k)
         matrix_result <- cbind(matrix_result, bijk)
       }
     }
     a_result <- t(result_multi[[i]]$a)
+    a_result <- a_result[(moreburn+1):nlast,]
     colnames(a_result) <- paste0("a",1:p)
-    jbw_result <- result_multi[[i]]$jbw
-    matrix_result <- cbind(matrix_result, a_result, jbw_result)
-    coda_result[[i]] <- mcmc(matrix_result, start = burn+1)
+    lambda <- result_multi[[i]]$jbw
+    lambda <- lambda[(moreburn+1):nlast]
+    matrix_result <- cbind(matrix_result, a_result, lambda)
+    coda_result[[i]] <- mcmc(matrix_result, start = burn+moreburn+1)
   }
   coda_result_list <- mcmc.list(coda_result)
   return(coda_result_list)
 }
 
 
-multi_chain_parallel_coda <- function(result_multi, burn = 1000, N_para, p, order){
+multi_chain_coda_nol <- function(result_multi, burn = 1000, N_para, p, order,
+                                 moreburn = 0, nlast = NULL){
+  if(is.null(nlast)) nlast <- length(result_multi[[1]]$b[1,1,])
   coda_result <- list()
   matrix_result <- NULL
   for(i in 1:N_para){
     matrix_result <- NULL
     for(j in 1:order){
       for(k in 1:p){
-        bijk <- matrix(result_multi[[i]]$b[j,k,], ncol = 1)
+        bijk <- matrix(result_multi[[i]]$b[j,k,(moreburn+1):nlast], ncol = 1)
+        colnames(bijk) <- paste0("b",j,k)
+        matrix_result <- cbind(matrix_result, bijk)
+      }
+    }
+    a_result <- t(result_multi[[i]]$a)
+    a_result <- a_result[(moreburn+1):nlast,]
+    colnames(a_result) <- paste0("a",1:p)
+    matrix_result <- cbind(matrix_result, a_result)
+    coda_result[[i]] <- mcmc(matrix_result, start = burn+moreburn+1)
+  }
+  coda_result_list <- mcmc.list(coda_result)
+  return(coda_result_list)
+}
+
+multi_chain_coda_nol_onlya <- function(result_multi, burn = 1000, N_para, p, order,
+                                 moreburn = 0, nlast = NULL){
+  if(is.null(nlast)) nlast <- length(result_multi[[1]]$b[1,1,])
+  coda_result <- list()
+  matrix_result <- NULL
+  for(i in 1:N_para){
+    a_result <- t(result_multi[[i]]$a)
+    a_result <- a_result[(moreburn+1):nlast,]
+    colnames(a_result) <- paste0("a",1:p)
+    matrix_result <- a_result
+    coda_result[[i]] <- mcmc(matrix_result, start = burn+moreburn+1)
+  }
+  coda_result_list <- mcmc.list(coda_result)
+  return(coda_result_list)
+}
+
+multi_chain_parallel_coda <- function(result_multi, burn = 1000, N_para, p, order, moreburn = 0){
+  nlast <- length(result_multi[[1]]$b[1,1,])
+  coda_result <- list()
+  matrix_result <- NULL
+  for(i in 1:N_para){
+    matrix_result <- NULL
+    for(j in 1:order){
+      for(k in 1:p){
+        bijk <- matrix(result_multi[[i]]$b[j,k,(moreburn+1):nlast], ncol = 1)
         colnames(bijk) <- paste0("b",j,k)
         matrix_result <- cbind(matrix_result, bijk)
       }
     }
     a_result <- t(result_multi[[i]]$a_PT[,1,])
+    a_result <- a_result[(moreburn+1):nlast,]
     colnames(a_result) <- paste0("a",1:p)
     jbw_result <- result_multi[[i]]$jbw
-    matrix_result <- cbind(matrix_result, a_result, jbw_result)
-    coda_result[[i]] <- mcmc(matrix_result, start = burn+1)
+    jbw_result <- jbw_result[(moreburn+1):nlast]
+    matrix_result <- cbind(matrix_result, a_result)
+    coda_result[[i]] <- mcmc(matrix_result, start = burn+moreburn+1)
   }
   coda_result_list <- mcmc.list(coda_result)
   return(coda_result_list)
@@ -85,7 +131,9 @@ a_parallel_plot <- function(PT_order15_jbw_L3_new, i, p, L, first = TRUE){
   }
 }
 
-get.result.bdregjump <- function(fit.x, x.obs, y.obs, b0x, a0, thin_index=NULL){
+get.result.bdregjump <- function(fit.x, x.obs, y.obs, b0x, a0,
+                                 trim = 1, post = TRUE, thin_index=NULL){
+  y.grid <- seq(-trim, trim, .01)
   cat("Runtime", round(fit.x$runtime[3]), "seconds\n")
   if(is.null(thin_index)){
     b.est <- fit.x$b
@@ -102,15 +150,27 @@ get.result.bdregjump <- function(fit.x, x.obs, y.obs, b0x, a0, thin_index=NULL){
   p <- dim(fit.x$b)[2]
   
   # plot1
-  par(mfrow = c(p,1))
+  par(mfrow = c(p,2))
   
   for(j in 1:p){
-    boxplot(data.frame(b=t(b.est[,j,]),a=a.est[j,]), col=tcol(1+1:(1+order),.3), border=tcol(1+1:(1+order),.7))
+    boxplot(data.frame(b=t(b.est[,j,]),a=a.est[j,]), col=tcol(1+1:(1+order),.3), border=tcol(1+1:(1+order),.7),
+            main = paste0("predictor", j))
     grid()
     points(c(b0x[,j], a0[j]), pch="+", cex=2)
   }
   
   # plot2
+  
+  plot(a.est[1,],ty="l", ylim=range(a.est), ylab="a", xlab="MCMC draw", main = TeX("traceplot of $\\alpha$"))
+  for(i in 1:length(a0)) lines(a.est[i,], col=tcol(i,.5), lwd=2)
+  abline(h = a0, lty=2, col=1:length(a0))
+  
+  plot(jbw.est, ty="l", xlab="MCMC draw", ylab="jump bw", col=tcol(1,.5), lwd=2, main = TeX("traceplot of $\\lambda$"))
+  abline(h = jbw0, lty=2)
+  
+  cat("Estimated jump persistence (true=", pers0, ")\n", round(quantile(jbw.est, c(0.025, .25,.5,.75, 0.975))/0.32,2), "\n")
+  
+  # plot3
   par(mfrow = c(2,2))
   xnew <- rep(1,4)
   for(i in 1:(p-1)) xnew <- cbind(xnew, seq(-2,2,1.25))
@@ -118,39 +178,30 @@ get.result.bdregjump <- function(fit.x, x.obs, y.obs, b0x, a0, thin_index=NULL){
   xb0 <- tcrossprod(xnew, b0x)
   xa0 <- c(xnew %*% a0)
   if(pos.synth) xa0 <- pmax(0, xa0)
-  f0x <- sapply(1:nnew, function(i) get.f(b=xb0[i,],a=xa0[i], sh=shapes0, jbw=jbw0))
+  f0x <- sapply(1:nnew, function(i) get.f(b=xb0[i,],a=xa0[i], sh=shapes0, jbw=jbw0,
+                                          trim=trim, post=post))
   
   nsamp <- ncol(a.est)
   for(cl in 1:4){
     ix.cl <- abs(x.obs[,2] - xnew[cl,2]) < 0.25
-    hist(y.obs[ix.cl], freq=FALSE, main="", xlab="Y", xlim=c(-1,1))
+    hist(y.obs[ix.cl], freq=FALSE, main="", xlab="Y", xlim=c(-trim,trim))
     ylim <- par("usr")[3:4]
     xb <- apply(b.est, 3, function(b) tcrossprod(xnew[cl,,drop=FALSE], b))
     xa <- c(xnew[cl,,drop=FALSE] %*% a.est)
     if(pos.est) xa <- pmax(xa, 0)
-    fx <- sapply(1:nsamp, function(s) get.f(b=xb[,s],a=xa[s],sh=shapes.est[,s],jbw=jbw.est[s]))
+    fx <- sapply(1:nsamp, function(s) get.f(b=xb[,s],a=xa[s],sh=shapes.est[,s],jbw=jbw.est[s],
+                                            trim=trim, post=FALSE))
     for(s in 1:nsamp) lines(y.grid, fx[,s], col=tcol(2,.5))
     lines(y.grid, rowMeans(fx), col=4, lwd=2)
     lines(y.grid, f0x[,cl], lwd=2)
-    dropx <- 1-fx[100,]/fx[101,]
+    drop_pos <- trim/0.01
+    dropx <- 1-fx[drop_pos,]/fx[drop_pos+1,]
     drop.est <- round(100*median(dropx))
     drop.ci <- round(100*quantile(dropx, pr=c(.025,.975)))
     text(-1, ylim[2]*0.9, bquote('Drop%'==.(drop.est)[paste("[",.(drop.ci[1]),",",.(drop.ci[2]),"]")]), pos=4)
   }
   
   cat("accperatnce rate:", round(100*fit.x$acpt), "%\n")
-  
-  
-  # plot3
-  par(mfrow = c(2,1))
-  plot(a.est[1,],ty="l", ylim=range(a.est), ylab="a", xlab="MCMC draw")
-  for(i in 1:length(a0)) lines(a.est[i,], col=tcol(i,.5), lwd=2)
-  abline(h = a0, lty=2, col=1:length(a0))
-  
-  plot(jbw.est, ty="l", xlab="MCMC draw", ylab="jump bw", col=tcol(1,.5), lwd=2)
-  abline(h = jbw0, lty=2)
-  
-  cat("Estimated jump persistence (true=", pers0, ")\n", round(quantile(jbw.est, c(0.025, .25,.5,.75, 0.975))/0.32,2), "\n")
 }
 
 get.result.data <- function(fit.x, x.obs, y.obs, b0x, a0, thin_index=NULL){
@@ -271,12 +322,14 @@ real_data_plot <- function(fit.x, x, x.test, y.test, yFn){
   }
 }
 
-get.swap.ratio <- function(adapt_PT_new_rho, N_parallel = 6, L = 5){
+get.swap.ratio <- function(adapt_PT_new_rho, N_parallel = 6, L = 5, moreburn = 0){
+  nlast <- ncol(adapt_PT_new_rho[[1]]$swap_info)
   result <- matrix(NA, N_para, L-1)
   for(i in 1:N_para){
+    current_info <- adapt_PT_new_rho[[i]]$swap_info[,(1+moreburn):nlast]
     for(j in 1:(L-1)){
-      swap_ind <- (adapt_PT_new_rho[[i]]$swap_info[1,] == j)
-      result[i,j] <- mean(adapt_PT_new_rho[[i]]$swap_info[3,swap_ind])
+      swap_ind <- (current_info[1,] == j)
+      result[i,j] <- mean(current_info[3,swap_ind])
     }
   }
   return(result)
