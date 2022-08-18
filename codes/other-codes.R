@@ -132,7 +132,7 @@ a_parallel_plot <- function(PT_order15_jbw_L3_new, i, p, L, first = TRUE){
 }
 
 get.result.bdregjump <- function(fit.x, x.obs, y.obs, b0x, a0,
-                                 trim = 1, post = TRUE, thin_index=NULL){
+                                 trim = 1, thin_index=NULL){
   y.grid <- seq(-trim, trim, .01)
   cat("Runtime", round(fit.x$runtime[3]), "seconds\n")
   if(is.null(thin_index)){
@@ -179,7 +179,7 @@ get.result.bdregjump <- function(fit.x, x.obs, y.obs, b0x, a0,
   xa0 <- c(xnew %*% a0)
   if(pos.synth) xa0 <- pmax(0, xa0)
   f0x <- sapply(1:nnew, function(i) get.f(b=xb0[i,],a=xa0[i], sh=shapes0, jbw=jbw0,
-                                          trim=trim, post=post))
+                                          trim=trim))
   
   nsamp <- ncol(a.est)
   for(cl in 1:4){
@@ -190,7 +190,7 @@ get.result.bdregjump <- function(fit.x, x.obs, y.obs, b0x, a0,
     xa <- c(xnew[cl,,drop=FALSE] %*% a.est)
     if(pos.est) xa <- pmax(xa, 0)
     fx <- sapply(1:nsamp, function(s) get.f(b=xb[,s],a=xa[s],sh=shapes.est[,s],jbw=jbw.est[s],
-                                            trim=trim, post=FALSE))
+                                            trim=trim))
     for(s in 1:nsamp) lines(y.grid, fx[,s], col=tcol(2,.5))
     lines(y.grid, rowMeans(fx), col=4, lwd=2)
     lines(y.grid, f0x[,cl], lwd=2)

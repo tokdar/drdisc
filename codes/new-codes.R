@@ -64,8 +64,8 @@ yFn <- fn.types[[type]]
 
 wFn <- function(y, beta, alpha=0, bw=0.16) return(c(matrix(yFn(y), nrow=length(y)) %*% beta) + alpha*half.kern(y,bw))
 Phi <- function(x) plogis(x)
-fFn <- function(y, shapes=c(1,1), trim=1, ...) return((trim/2)*dbeta((y+trim)/(2*trim),shapes[1],shapes[2])
-                                                      *Phi(wFn(y, ...)))
+fFn <- function(y, shapes=c(1,1), trim=1, ...) return((1/2)*dtrunc((y+1)/2, "beta", a = (1-trim)/2, b = (1+trim)/2,
+                                                                   shape1 = shapes[1], shape2 = shapes[2])*Phi(wFn(y, ...)))
 
 y.grid <- seq(-1,1,.01)
 
@@ -73,19 +73,12 @@ get.poly.mat <- yFn
 
 ###### get.f and simulate.fx ######
 
-get.f <- function(b, a=0, sh=c(1,1), jbw=0.16, trim=1, post=TRUE) {
+get.f <- function(b, a=0, sh=c(1,1), jbw=0.16, trim=1) {
   y.grid <- seq(-trim, trim, .01)
-  if(post){
-    f.grid <- fFn(y.grid, trim=1, beta=b, alpha=a, shapes=sh, bw=jbw)
-    normalization.const <- (integrate(fFn, -trim, 0, beta=b, alpha=a, shapes=sh, bw=jbw, trim = 1)$value
-                            + integrate(fFn, 0, trim, beta=b, alpha=a, shapes=sh, bw=jbw, trim = 1)$value)
-  } 
-  else{
-    f.grid <- fFn(y.grid, trim=trim, beta=b, alpha=a, shapes=sh, bw=jbw)
-    normalization.const <- (integrate(fFn, -trim, 0, beta=b, alpha=a, shapes=sh, bw=jbw, trim = trim)$value
-                            + integrate(fFn, 0, trim, beta=b, alpha=a, shapes=sh, bw=jbw, trim = trim)$value)
-  } 
-  
+  f.grid <- fFn(y.grid, trim=trim, beta=b, alpha=a, shapes=sh, bw=jbw)
+  normalization.const <- (integrate(fFn, -trim, 0, beta=b, alpha=a, shapes=sh, bw=jbw, trim = trim)$value
+                          + integrate(fFn, 0, trim, beta=b, alpha=a, shapes=sh, bw=jbw, trim = trim)$value)
+    
   return(f.grid/normalization.const)
 }
 
@@ -101,7 +94,8 @@ simulate.fx <- function(n, b, x, a, shapes=c(1,1), jbw=0.16,
   ix.remain <- 1:n
   n.remain <- n
   while(n.remain > 0){
-    z <- 2*trim*rbeta(n.remain, shapes[1],shapes[2])-trim
+    z <- 2*rtrunc(n.remain, "beta", a = (1-trim)/2, b = (1+trim)/2,
+                  shape1 = shapes[1], shape2 = shapes[2]) - 1
     pm <- matrix(yFn(z), nrow=n.remain)
     hk <- half.kern(z,jbw)
     x.remain <- x[ix.remain,,drop=FALSE]
@@ -319,8 +313,16 @@ bdreg <- function(y, x=1, b=NULL, nsamp=100, thin=1, burn=100, prec=1){
 
 ###### bdregjump ######
 
-beta.loglik <- function(shapes, yy) return(sum(dbeta(yy, shapes[1], shapes[2], log=TRUE)))
-beta.loglik2 <- function(bp, yy) beta.loglik(bp[2]*plogis(bp[1]*c(1,-1)), yy)
+beta.loglik <- function(shapes, yy, trim = 1){
+  if(trim == 1){
+    result <- sum(dbeta(yy, shapes[1], shapes[2], log=TRUE))
+  } else{
+    result <- sum(log(dtrunc(yy, "beta", a = (1-trim)/2, b = (1+trim)/2,
+                             shape1 = shapes[1], shape2 = shapes[2])))
+  }
+  return(result)
+}
+beta.loglik2 <- function(bp, yy, trim) beta.loglik(bp[2]*plogis(bp[1]*c(1,-1)), yy, trim)
 betapost.norm.approx <- function(y){
   mu.hat <- mean(y)
   mu.vec <- c(mu.hat, 1-mu.hat)
@@ -4001,7 +4003,8 @@ bdregjump_adapt_poly_trim_alphanoPG <- function(y, x=1, b=NULL, nsamp=100, thin=
     n.remain <- n
     ix.remain <- 1:n
     while(n.remain > 0){
-      z <- 2*trim*rbeta(n.remain, shapes[1],shapes[2])-trim
+      z <- 2*rtrunc(n.remain, "beta", a = (1-trim)/2, b = (1+trim)/2,
+                    shape1 = shapes[1], shape2 = shapes[2]) - 1
       pm <- matrix(yFn(z), nrow=n.remain)
       hk <- half.kern(z,jbw)
       x.remain <- x[ix.remain,,drop=FALSE]
@@ -4183,7 +4186,8 @@ bdregjump_adapt_poly_trim_alphanoPG <- function(y, x=1, b=NULL, nsamp=100, thin=
       bp.new <- bp.hat+c(crossprod(bp.R, bp.znew))
       cont <- bp.new[2] < 0
     }
-    ll.diff <- beta.loglik2(bp.new, beta.y) - beta.loglik2(shapes.bp, beta.y)
+    beta.y_true <- (1+y.comb)/2
+    ll.diff <- beta.loglik2(bp.new, beta.y_true, trim) - beta.loglik2(shapes.bp, beta.y_true, trim)
     log.hastings <- ll.diff - 0.5*(2+bp.df)*(log1p(sum(bp.znew^2)/bp.df) - log1p(sum(bp.z^2)/bp.df))
     
     if(log(runif(1)) < log.hastings){
@@ -4562,5 +4566,350 @@ bdregjump_adapt_poly_trim_noPG <- function(y, x=1, b=NULL, nsamp=100, thin=1, bu
               p_accept = p_accept.store,
               runtime=run.time, 
               acpt=c(a=nacpt, b=nacpt_b, store=nacpt.bp)/(burn+nsamp*thin))
+  )
+}
+
+##### new #####
+
+bdregjump_adapt_poly_trim_alphanoPG_shapeadapt <- function(y, x=1, b=NULL, nsamp=100, thin=1, burn=100, 
+                                                           shapes=c(1,1), prec=1, order = 3, trim = 0.5,
+                                                           jump=list(a=NULL, persistence=0.5, positive=TRUE, 
+                                                                     prec=1, ncand=10, update.jbw=TRUE),
+                                                           adap=list(mu_adap=NULL, Sigma_adap=NULL,
+                                                                     alpha_star = 0.234, r_adap = 2/3,
+                                                                     chol.pivot=FALSE),
+                                                           print.process = FALSE, print.i = FALSE){
+  
+  lpoly <- list(
+    #  Vectorize(function(x) return(1/sqrt(2)), "x"), ## k = 0
+    function(x) return(sqrt(3/2)*x), ## k = 1
+    function(x) return(sqrt(5/8)*(3*x^2 - 1)), ## k = 2
+    function(x) return(sqrt(7/8)*(5*x^3 - 3*x)) ## k = 3
+  )
+  lpoly <- lpoly[1:order]
+  get.poly.mat <- function(y) return(sapply(lpoly, function(f) f(y)))
+  yFn <- get.poly.mat
+  
+  n <- length(y)
+  if(is.null(dim(x))) x <- matrix(x, nrow=n)
+  p <- ncol(x)
+  if(is.null(b)) b <- replicate(p, rep(0,order))
+  b <- matrix(b, order, p)
+  if(length(prec) < p) prec <- rep(prec, p)[1:p]
+  shapes_log <- log(shapes)
+  
+  a <- jump$a
+  if(is.null(a)) a <- rep(0, p)
+  persistence <- jump$persistence
+  if(is.null(persistence)) persistence <- 0.5
+  jbw <- 0.16*2*persistence
+  positive <- jump$positive
+  if(is.null(positive)) positive <- FALSE
+  hprec <- jump$prec
+  if(is.null(hprec)) hprec <- 1
+  ncand <- jump$ncand
+  if(is.null(ncand)) ncand <- 10
+  update.jbw <- jump$update.jbw
+  if(is.null(update.jbw)) update.jbw <- TRUE
+  
+  loglambda_adap <- log(2.38^2/p)
+  loglambda_shape <- log(2.38^2/2)
+  
+  mu_adap <- adap$mu_adap
+  if(is.null(mu_adap)) mu_adap <- matrix(rep(0,p), ncol = 1)
+  Sigma_adap <- adap$Sigma_adap
+  if(is.null(Sigma_adap)) Sigma_adap <- diag(p)
+  alpha_star <- adap$alpha_star
+  if(is.null(alpha_star)) alpha_star <- 0.234
+  r_adap <- adap$r_adap
+  if(is.null(r_adap)) r_adap <- 2/3
+  chol.pivot <- adap$chol.pivot
+  if(is.null(chol.pivot)) chol.pivot <- FALSE
+  
+  mu_shape <- rep(0,2)
+  Sigma_shape <- diag(2)
+  
+  Poly.obs <- get.poly.mat(y)
+  b.store <- array(NA, dim=c(order, p, nsamp))
+  a.store <- matrix(NA, p, nsamp)
+  az.new.store <- matrix(NA, p, nsamp)
+  jbw.store <- rep(NA, nsamp)
+  Ntot.store <- rep(NA, nsamp)
+  shapes.store <- matrix(NA, 2, nsamp)
+  Sigma_adap.store <- array(NA, dim=c(p, p, nsamp))
+  Sigma_shape.store <- array(NA, dim=c(2, 2, nsamp))
+  loglambda_adap.store <- rep(NA, nsamp)
+  sample_i_count.store <- rep(NA, nsamp)
+  p_accept.store <- rep(NA, nsamp)
+  count.store <- 0
+  nacpt <- 0
+  nacpt.bp <- 0
+  bp.df <- 6
+  az.new <- rep(0,p)
+  
+  diff_prev <- burn_i_count <- sample_i_count <- 0
+  
+  beta.loglik <- function(shapes, yy, trim = 1){
+    if(trim == 1){
+      result <- sum(dbeta(yy, shapes[1], shapes[2], log=TRUE))
+    } else{
+      result <- sum(log(dtrunc(yy, "beta", a = (1-trim)/2, b = (1+trim)/2,
+                               shape1 = shapes[1], shape2 = shapes[2])))
+    }
+    return(result)
+  }
+  
+  ## get.miss.reject.x ##
+  
+  get.miss.reject.x <- function(b, n, x, a, shapes=c(1,1), jbw=0.16, 
+                                trim, positive=FALSE){
+    n.hits <- 0
+    n.miss <- 0
+    Poly.miss <- NULL
+    Half.miss <- NULL
+    w.miss <- NULL
+    x.miss <- NULL
+    y.miss <- NULL
+    
+    xa <- c(x %*% a)
+    if(positive) xa <- pmax(0, xa)
+    
+    n.remain <- n
+    ix.remain <- 1:n
+    while(n.remain > 0){
+      z <- 2*rtrunc(n.remain, "beta", a = (1-trim)/2, b = (1+trim)/2,
+                    shape1 = shapes[1], shape2 = shapes[2]) - 1
+      pm <- matrix(yFn(z), nrow=n.remain)
+      hk <- half.kern(z,jbw)
+      x.remain <- x[ix.remain,,drop=FALSE]
+      xa.remain <- xa[ix.remain]
+      w <- rowSums(x.remain * (pm %*% b)) + xa.remain*hk
+      u <- (runif(n.remain) < Phi(w))
+      n.reject <- sum(!u)
+      if(n.reject > 0){
+        Poly.miss <- rbind(Poly.miss, pm[!u,])
+        Half.miss <- c(Half.miss, hk[!u])
+        w.miss <- c(w.miss, w[!u])
+        x.miss <- rbind(x.miss, x.remain[!u,,drop=FALSE])
+        y.miss <- c(y.miss, z[!u])
+      }
+      n.remain <- n.reject
+      ix.remain <- ix.remain[!u]
+      n.miss <- n.miss + n.reject
+    }
+    return(list(Poly.miss=as.matrix(Poly.miss), Half.miss=Half.miss, 
+                w.miss=w.miss, n.miss=n.miss, x.miss=x.miss, y.miss=y.miss))
+  }
+  
+  get.log.likelihood <- function(y, x, Poly.obs, Poly.miss,
+                                 y.miss, x.miss,
+                                 a, b, jbw){
+    
+    Half.obs <- half.kern(y, jbw)
+    Half.miss <- half.kern(y.miss, jbw)
+    
+    xa.obs <- c(x %*% a)
+    xa.miss <- c(x.miss %*% a)
+    if(positive){
+      xa.obs <- pmax(0, xa.obs)
+      xa.miss <- pmax(0, xa.miss)
+    }
+    w.obs <- rowSums(x * (Poly.obs %*% b)) + xa.obs * Half.obs
+    w.miss <- rowSums(x.miss * (Poly.miss %*% b)) + xa.miss * Half.miss
+    
+    log.likelihood <- sum(plogis(w.obs, log.p = TRUE)) +
+      sum(plogis(w.miss, lower.tail = FALSE, log.p = TRUE))
+    return(log.likelihood)
+  }
+  
+  chol_bi <- function(S){
+    a <- sqrt(S[1,1])
+    b <- S[1,2]/a
+    c <- sqrt(S[2,2] - b^2)
+    
+    result <- matrix(c(a,0,b,c), nrow = 2, ncol = 2)
+    return(result)
+  }
+  
+  ##
+  
+  time.stamp.0 <- proc.time()
+  for(iter in -(burn-1):(nsamp*thin)){
+    
+    Half.obs <- half.kern(y, jbw)
+    xa.obs <- c(x %*% a)
+    if(positive) xa.obs <- pmax(0, xa.obs)
+    
+    w.obs <- rowSums(x * (Poly.obs %*% b)) + xa.obs * Half.obs
+    
+    missing.stuff <- get.miss.reject.x(b, n, x, a, shapes, jbw, 
+                                       trim, positive)
+    n.miss <- missing.stuff$n.miss
+    Poly.miss <- missing.stuff$Poly.miss
+    Half.miss <- missing.stuff$Half.miss
+    w.miss <- missing.stuff$w.miss
+    x.miss <- missing.stuff$x.miss
+    y.miss <- missing.stuff$y.miss
+    
+    if(sum(y.miss==-trim) > 0) y.miss[y.miss==-trim] <- (-trim + 1e-10)
+    if(sum(y.miss==trim) > 0) y.miss[y.miss==trim] <- (trim - 1e-10)
+    
+    Ntot <- n + n.miss  
+    
+    Poly.comb <- rbind(Poly.obs, Poly.miss)
+    Half.comb <- c(Half.obs, Half.miss)
+    w.comb <- c(w.obs, w.miss)
+    x.comb <- rbind(x, x.miss)
+    y.comb <- c(y, y.miss)
+    
+    u.comb <- rep(c(1,0), c(n, n.miss))
+    pg.draws <- pmax(1e-12, rpg.devroye(Ntot, h=1, z=w.comb))
+    pg.resp <- (u.comb - 0.5)/pg.draws
+    pg.residual <- pg.resp - w.comb
+    
+    ## update b
+    for(j in 1:p){
+      xPoly.j <- x.comb[,j] * Poly.comb
+      pg.residual <- pg.residual + c(xPoly.j %*% b[,j])
+      
+      Yw <- pg.residual * sqrt(pg.draws)
+      Xw <- xPoly.j * sqrt(pg.draws)
+      Uw <- chol(crossprod(Xw) + diag(prec[j],order))
+      b[,j] <- c(backsolve(Uw, backsolve(Uw, crossprod(Xw,Yw), transpose=TRUE) + rnorm(order)))
+      if(any(is.na(b[,j]))) stop("NAs in b")
+      pg.residual <- pg.residual - c(xPoly.j %*% b[,j])
+    }
+    
+    ## update a
+    xa <- c(x.comb %*% a)
+    if(positive) xa <- pmax(0, xa)
+    
+    pg.residual <- pg.residual + xa * Half.comb
+    
+    Sigma_chol <- exp(loglambda_adap/2) * chol(Sigma_adap + diag(1e-10, p), pivot = chol.pivot)
+    if(chol.pivot == TRUE){
+      var_order <- attr(Sigma_chol, "pivot")
+      az.new[var_order] <- crossprod(Sigma_chol, rnorm(p))
+    } else{
+      az.new <- crossprod(Sigma_chol, rnorm(p))
+    }
+    
+    a.new <- a + az.new
+    xa.new <- c(x.comb %*% a.new)
+    if(positive) xa.new <- pmax(0, xa.new)
+    
+    loglike.new <- get.log.likelihood(y = y, x = x,
+                                      Poly.obs = Poly.obs, Poly.miss = Poly.miss,
+                                      y.miss = y.miss, x.miss = x.miss,
+                                      a = a.new, b = b, jbw = jbw)
+    loglike <- get.log.likelihood(y = y, x = x,
+                                  Poly.obs = Poly.obs, Poly.miss = Poly.miss,
+                                  y.miss = y.miss, x.miss = x.miss,
+                                  a = a, b = b, jbw = jbw)
+    
+    log.hastings.ratio <- ( (loglike.new - loglike) +
+                              sum(dnorm(a.new,0,sqrt(1/hprec),log=TRUE)
+                                  - dnorm(a,0,sqrt(1/hprec),log=TRUE)) )
+    
+    if(log(runif(1)) < log.hastings.ratio){
+      a <- a.new
+      xa <- xa.new
+      nacpt <- nacpt+1
+    }
+    p_accept <- min(1, exp(log.hastings.ratio))
+    
+    if(iter <= 0) {
+      diff_curr <- p_accept - alpha_star
+      burn_i_count <- burn_i_count + ((diff_prev * diff_curr) <= 0)
+      gamma_adap <- min(0.5, 1/(burn_i_count^r_adap))
+      diff_prev <- diff_curr
+      
+      if(print.i) print(burn_i_count)
+    }
+    else {
+      diff_curr <- p_accept - alpha_star
+      sample_i_count <- sample_i_count + ((diff_prev * diff_curr) <= 0)
+      gamma_adap <- min(0.5, 1/(sample_i_count^r_adap))
+      diff_prev <- diff_curr
+      
+      if(print.i) print(sample_i_count)
+    }
+    
+    loglambda_adap <- loglambda_adap + gamma_adap * (p_accept - alpha_star)
+    a_mu_diff <- a - mu_adap
+    mu_adap <- mu_adap + gamma_adap * a_mu_diff
+    Sigma_adap <- Sigma_adap + gamma_adap*(tcrossprod(a_mu_diff, a_mu_diff) - Sigma_adap)
+    
+    pg.residual <- pg.residual - xa * Half.comb
+    
+    ## update jbw
+    if(update.jbw){
+      persistence.cand <- rprior.persistence(ncand)
+      jbw.cand <- 2*0.16*persistence.cand
+      Half.comb.cand <- sapply(jbw.cand, function(bw) half.kern(y.comb, bw))
+      res.cand <- pg.residual + xa * Half.comb - xa * Half.comb.cand
+      lp0 <- dnorm(pg.residual,0,sqrt(1/pg.draws),log=TRUE)
+      lp.cand <- c(apply(res.cand, 
+                         2, 
+                         function(res) sum(dnorm(res,0,sqrt(1/pg.draws),log=TRUE) - lp0)), 
+                   0)
+      cand.draw <- sample(ncand+1,1,prob=exp(lp.cand - logsum(lp.cand)))
+      if(cand.draw < ncand+1) jbw <- jbw.cand[cand.draw]
+    }    
+    
+    ## update beta shapes
+    beta.y <- (1+y.comb)/2
+    
+    Sigma_shape_chol <- exp(loglambda_shape/2) * chol_bi(Sigma_shape)
+    shapes_log_z <- crossprod(Sigma_shape_chol, rnorm(2))
+    shapes_log_new <- shapes_log + shapes_log_z
+    shapes_new <- exp(shapes_log_new)
+    
+    log_has_shape <- beta.loglik(shapes_new, beta.y, trim) + sum(shapes_log_new) -
+      beta.loglik(shapes, beta.y, trim) - sum(shapes_log)
+    
+    if(log(runif(1)) < log_has_shape){
+      shapes <- shapes_new
+      shapes_log <- shapes_log_new
+      nacpt.bp <- nacpt.bp+1
+    }
+    
+    p_accept_shape <- min(1, exp(log_has_shape))
+    
+    iter_pos <- iter + burn
+    gamma_shape <- min(0.5, 1/(iter_pos^r_adap))
+    
+    loglambda_shape <- loglambda_shape + gamma_shape * (p_accept_shape - alpha_star)
+    shape_mu_diff <- shapes_log - mu_shape
+    mu_shape <- mu_shape + gamma_shape * shape_mu_diff
+    Sigma_shape <- Sigma_shape + gamma_shape*(tcrossprod(shape_mu_diff, shape_mu_diff) - Sigma_shape)
+    
+    print(shapes)
+    print(Sigma_shape)
+    
+    if(print.process) print(iter)
+    
+    if(iter > 0 & (iter %% thin == 0)){
+      count.store <- count.store + 1
+      b.store[,,count.store] <- b
+      a.store[,count.store] <- a
+      az.new.store[,count.store] <- az.new
+      jbw.store[count.store] <- jbw
+      Ntot.store[count.store] <- Ntot
+      shapes.store[,count.store] <- shapes
+      Sigma_adap.store[,,count.store] <- Sigma_adap
+      Sigma_shape.store[,,count.store] <- Sigma_shape
+      loglambda_adap.store[count.store] <- loglambda_adap
+      sample_i_count.store[count.store] <- sample_i_count
+      p_accept.store[count.store] <- p_accept
+    }
+  }
+  run.time <- proc.time() - time.stamp.0
+  return(list(b=b.store, a=a.store, az.new = az.new.store, jbw=jbw.store, Ntot=Ntot.store,
+              Sigma_adap = Sigma_adap.store, loglambda_adap = loglambda_adap.store,
+              shapes=shapes.store, sample_i_count = sample_i_count.store,
+              p_accept = p_accept.store, Sigma_shape = Sigma_shape.store,
+              runtime=run.time, 
+              acpt=c(a=nacpt, store=nacpt.bp)/(burn+nsamp*thin))
   )
 }
