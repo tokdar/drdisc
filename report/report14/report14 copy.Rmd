@@ -1,0 +1,365 @@
+---
+title: "report14"
+author: "Haoliang Zheng"
+date: "2/19/2022"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "/Users/zhl/Desktop/drdisc")
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(fig.align = 'center', 
+                      fig.width=6, fig.height=7)
+
+library(abind)
+library(knitr)
+library(latex2exp)
+require(magrittr)
+require(plyr)
+library(tidyverse)
+library(coda)
+library(doParallel)
+library(doMC) 
+library(foreach)
+library(doRNG)
+
+adapt <- FALSE
+bunch <- FALSE
+N_para <- 6
+
+registerDoMC(6)
+
+par(mar = c(2,2,2,2))
+```
+
+
+```{r source, include=FALSE}
+source("./codes/new-codes.R")
+source("./codes/test-codes.R")
+source("./codes/other-codes.R")
+
+multi_chain_coda_noa <- function(result_multi, burn = 1000, N_para, p, order){
+  coda_result <- list()
+  matrix_result <- NULL
+  for(i in 1:N_para){
+    matrix_result <- NULL
+    for(j in 1:order){
+      for(k in 1:p){
+        bijk <- matrix(result_multi[[i]]$b[j,k,], ncol = 1)
+        colnames(bijk) <- paste0("b",j,k)
+        matrix_result <- cbind(matrix_result, bijk)
+      }
+    }
+    coda_result[[i]] <- mcmc(matrix_result, start = burn+1)
+  }
+  coda_result_list <- mcmc.list(coda_result)
+  
+  return(coda_result_list)
+}
+
+para_temp_plot <- function(adapt_PT_new, L, N_para = 6){
+par(mar = c(2,2,2,2))
+par(mfrow = c(N_para, 1))
+for(i in 1:N_para){
+  plot(adapt_PT_new[[i]]$temp[1,], type = "l", ylim=range(adapt_PT_new[[i]]$temp),
+       main = paste0("starting point ", i))
+  for(j in 2:L){
+    lines(adapt_PT_new[[i]]$temp[j,], col=tcol(j,.5), lwd=2)
+    }
+  }
+}
+```
+
+# math
+
+Denote $T_i$ as inverse temperature i, then the tempered version model is
+
+$$
+f_i(y|x) = \frac{\Phi \big\{T_i \big(\sum_{k=1}^K (x^T\beta_k) P_k(y) - (x^T \alpha)_{+} Q(y; \lambda) I(y > 0)\big)\big\}}{\int_{-1}^{1} \Phi \big\{T_i \big(\sum_{k=1}^K (x^T\beta_k) P_k(y) - (x^T \alpha)_{+} Q(y; \lambda) I(y > 0)\big)\big\} \mathrm{d}t}, 
+\quad x \in \mathbb{R}^p, y \in (-1, 1),
+$$
+
+(
+I also tried:
+$$
+f_i(y|x) = \frac{\Phi \big(\sum_{k=1}^K (x^T\beta_k) P_k(y) - T_i * (x^T \alpha)_{+} Q(y; \lambda) I(y > 0)\big)\big\}}{\int_{-1}^{1} \Phi \big(\sum_{k=1}^K (x^T\beta_k) P_k(y) - T_i * (x^T \alpha)_{+} Q(y; \lambda) I(y > 0)\big) \mathrm{d}t}, 
+\quad x \in \mathbb{R}^p, y \in (-1, 1),
+$$
+)
+
+To simplify the expression, denote the posterior distribution under $T_i$ as:
+$$
+\pi_i(a) = p_i(x | a) p(a) / c_i
+$$
+
+The acceptance probability for inverse temperature moving from 1 to 2 is:
+$$
+\alpha(1, 2) = 1 \wedge \frac{p_2(x | a) / c_2}{p_1(x | a) / c_1}
+$$
+
+Then swap probability is:
+$$
+\begin{aligned}
+\alpha(1, 2) &= 1 \wedge \frac{p_2(x | a_1) / c_2}{p_1(x | a_1) / c_1}
+\times \frac{p_1(x | a_2) / c_1}{p_2(x | a_2) / c_2} \\
+&= 1 \wedge \frac{p_1(x | a_2) * p_2(x | a_1)}{p_1(x | a_1) * p_2(x | a_2)}
+\end{aligned}
+$$
+
+# code
+
+## temp
+
+```{r eval=FALSE}
+w <- temp * (rowSums(x.remain * (pm %*% b)) + xa.remain*hk)
+u <- (runif(n.remain) < Phi(w))
+w.miss <- c(w.miss, w[!u])
+
+w.obs <- temp * (rowSums(x * (Poly.obs %*% b)) + xa.obs * Half.obs)
+
+## update b
+pg.residual <- pg.residual + temp * c(xPoly.j %*% b[,j])
+pg.residual <- pg.residual - temp * c(xPoly.j %*% b[,j])
+
+## update a
+pg.residual <- pg.residual + temp * xa * Half.comb
+res.new <- pg.residual - temp * xa.new * Half.comb
+res <- pg.residual - temp * xa * Half.comb
+log.hastings.ratio <- ( sum(dnorm(res.new,0,sqrt(1/pg.draws),log=TRUE)
+                            - dnorm(res,0,sqrt(1/pg.draws),log=TRUE))
+                        + sum(dnorm(a.new,0,sqrt(1/hprec),log=TRUE)
+                              - dnorm(a,0,sqrt(1/hprec),log=TRUE)) )
+```
+
+## likelihood ratio
+
+```{r eval=FALSE}
+get.swap.likelihood <-  function(temp, 
+                                 pg.residual_old, x.comb_old, Half.comb_old,
+                                 pg.draws_old, Poly.comb_old,
+                                 b_old, b_new,
+                                 a_old, a_new, positive=TRUE){
+  ## update b
+  pg.residual_old <- pg.residual_old + temp * rowSums(x.comb_old * (Poly.comb_old %*% b_old))
+  pg.residual_old <- pg.residual_old - temp * rowSums(x.comb_old * (Poly.comb_old %*% b_new))
+
+  ## update a
+  xa_old <- c(x.comb_old %*% a_old)
+  if(positive) xa_old <- pmax(0, xa_old)
+  xa_new <- c(x.comb_old %*% a_new)
+  if(positive) xa_new <- pmax(0, xa_new)
+  
+  pg.residual_old <- pg.residual_old + temp * xa_old * Half.comb_old
+  res_new <- pg.residual_old - temp * xa_new * Half.comb_old
+  log.likelihood <- sum(dnorm(res_new,0,sqrt(1/pg.draws_old),log=TRUE))
+  
+  return(log.likelihood)
+}
+
+## likelihood ratio
+
+for(l in 1:(L-1)){
+  config_info1 <- config_info_all[[l]]
+  config_info2 <- config_info_all[[l+1]]
+  
+  loglike12 <- get.swap.likelihood(temp=temp_PT[l],
+                                   pg.residual_old=config_info1$pg.residual,
+                                   x.comb_old=config_info1$x.comb,
+                                   Half.comb_old=config_info1$Half.comb,
+                                   pg.draws_old=config_info1$pg.draws,
+                                   Poly.comb_old=config_info1$Poly.comb,
+                                   b_old=b_PT[,,l], b_new=b_PT[,,(l+1)],
+                                   a_old=a_PT[,l], a_new=a_PT[,(l+1)], positive)
+  loglike21 <- get.swap.likelihood(temp=temp_PT[l+1],
+                                   pg.residual_old=config_info2$pg.residual,
+                                   x.comb_old=config_info2$x.comb,
+                                   Half.comb_old=config_info2$Half.comb,
+                                   pg.draws_old=config_info2$pg.draws,
+                                   Poly.comb_old=config_info2$Poly.comb,
+                                   b_old=b_PT[,,(l+1)], b_new=b_PT[,,l],
+                                   a_old=a_PT[,(l+1)], a_new=a_PT[,l], positive)
+  
+  loglikeratio <- (loglike12 + loglike21 - log.likelihood_PT[l] - log.likelihood_PT[l+1])
+  swap_accept_prob[l] <- min(1, exp(loglikeratio))
+}
+```
+
+
+
+# data
+
+```{r}
+vote <- read.csv("./codes/vote_data.csv")
+str(vote)
+vote <- subset(vote, abs(from_requirement_threshold) < 0.5)
+set.seed(1234)
+train.ss <- sample(nrow(vote), 15e3)
+
+preds <- model.matrix(~ #major.requirement 
+                        + ISS.against.recommendation 
+                      #+ shares.oustanding.base 
+                      #+ special.meeting 
+                      + analyst.coverage 
+                      #+ institutional.ownership 
+                      + past.stock.return 
+                      + q 
+                      + firm.size, 
+                      data = vote)[,-1]
+preds.train <- scale(preds[train.ss,])
+x <- cbind(1, preds.train)
+x.test <- cbind(1, scale(preds[-train.ss,],
+                         center=attr(preds.train,"scaled:center"),
+                         scale=attr(preds.train,"scaled:scale")))
+dimnames(x)[[2]][1] <- "Intercept"
+dimnames(x.test)[[2]][1] <- "Intercept"
+x.names <- dimnames(x)[[2]]
+
+y <- 2*vote[train.ss,"from_requirement_threshold"]
+y.test <- 2*vote[-train.ss,"from_requirement_threshold"]
+
+bunch <- FALSE
+pos.est <- TRUE
+```
+
+```{r}
+set.seed(123)
+N_para <- 6
+p <- 6
+order <- 15
+L <- 5
+
+kbw <- 2/(order-1)
+knots <- seq(-1,1,kbw)
+bsd.sq <- (0.67*kbw)^2
+gausskern <- lapply(knots, function(mu) return(function(x) return(exp(-0.5*(x-mu)^2/bsd.sq))))
+get.poly.mat <- function(y) return(sapply(gausskern, function(f) f(y)))
+
+yFn <- get.poly.mat
+
+b_init <- replicate(N_para, matrix(rnorm(n = order*p, sd=5), order, p))
+a_init <- replicate(N_para, rnorm(n = p, sd = 1.5))
+```
+
+
+# bdregjump_adapt_tempered_new
+
+```{r eval=FALSE}
+adapt_tempered_new <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_tempered(y=y, x=x, b=b_init[,,i], burn=0, nsamp=5000, thin=1, order = 15,
+                     jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.68, update.jbw=FALSE),
+                     adap=list(parallel = 5, alpha_star_PT = 0.234))
+```
+
+```{r}
+load("./report/report14/adapt_tempered_new.RData")
+```
+
+```{r temperednew, cache=TRUE}
+adapt_tempered_new_coda <- multi_chain_parallel_coda(adapt_tempered_new, burn=0, N_para, p, order)
+
+plot(adapt_tempered_new_coda)
+```
+
+```{r}
+sapply(1:6, function(x) adapt_tempered_new[[x]]$acpt)[c(1,3),]
+```
+
+```{r}
+get.swap.ratio(adapt_tempered_new)
+```
+
+```{r}
+para_temp_plot(adapt_tempered_new, 5, N_para)
+```
+
+I also have tried set inverse temp to be (1, 1, 1, 1, 1) at the beginning without
+adaption of temperature. However, the swap prob is still 0.
+
+# bdregjump_tempered_adapt
+
+## temp = 0.1
+
+```{r eval=FALSE}
+tempered_adapt01 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_tempered_adapt(y=y, x=x, b=b_init[,,i], burn=0, nsamp=5000, thin=1,
+                           order = 15, temp = 0.1,
+                     jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.68, update.jbw=FALSE))
+```
+
+```{r}
+load("./report/report14/tempered_adapt01.RData")
+```
+
+```{r adapt01, cache=TRUE}
+tempered_adapt01_coda <- multi_chain_coda(tempered_adapt01, burn=0, N_para, p, order)
+
+plot(tempered_adapt01_coda)
+```
+
+
+## temp = 0.25
+
+```{r eval=FALSE}
+tempered_adapt025 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_tempered_adapt(y=y, x=x, b=b_init[,,i], burn=0, nsamp=5000, thin=1,
+                           order = 15, temp = 0.25,
+                     jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.68, update.jbw=FALSE))
+```
+
+```{r}
+load("./report/report14/tempered_adapt025.RData")
+```
+
+```{r adapt025, cache=TRUE}
+tempered_adapt025_coda <- multi_chain_coda(tempered_adapt025, burn=0, N_para, p, order)
+
+plot(tempered_adapt025_coda)
+```
+
+## temp = 0.35
+
+```{r eval=FALSE}
+tempered_adapt035 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_tempered_adapt(y=y, x=x, b=b_init[,,i], burn=0, nsamp=5000, thin=1,
+                           order = 15, temp = 0.35,
+                     jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.68, update.jbw=FALSE))
+```
+
+```{r}
+load("./report/report14/tempered_adapt035.RData")
+```
+
+```{r adapt035, cache=TRUE}
+tempered_adapt035_coda <- multi_chain_coda(tempered_adapt035, burn=0, N_para, p, order)
+
+plot(tempered_adapt035_coda)
+```
+
+## temp = 0.5
+
+```{r eval=FALSE}
+tempered_adapt05 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_tempered_adapt(y=y, x=x, b=b_init[,,i], burn=0, nsamp=5000, thin=1,
+                           order = 15, temp = 0.5,
+                     jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.68, update.jbw=FALSE))
+```
+
+```{r}
+load("./report/report14/tempered_adapt05.RData")
+```
+
+```{r adapt05, cache=TRUE}
+tempered_adapt05_coda <- multi_chain_coda(tempered_adapt05, burn=0, N_para, p, order)
+
+plot(tempered_adapt05_coda)
+```
+
+

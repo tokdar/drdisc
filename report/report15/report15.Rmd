@@ -133,6 +133,28 @@ $$
 \alpha(1, 2) = 1 \wedge \frac{p_1(y, y^*_2 | \theta_2) * p_2(y, y^*_1 | \theta_1)}{p_1(y, y^*_1 | \theta_1) * p_2(y, y^*_2 | \theta_2)}
 $$
 
+```{r eval=FALSE}
+adapt_tempered_joint_new_per <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_tempered(y=y, x=x, b=b_init[,,i], burn=0, nsamp=10, thin=1, order = 15,
+                     jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.91, update.jbw=FALSE),
+                     adap=list(parallel = 5, alpha_star_PT = 0.234))
+```
+
+```{r}
+sapply(1:6, function(x) adapt_tempered_joint_new_per[[x]]$acpt)
+```
+
+
+```{r temperednew, cache=TRUE}
+adapt_tempered_joint_new_per_coda <- multi_chain_parallel_coda(adapt_tempered_joint_new_per, burn=0, N_para, p, order)
+
+plot(adapt_tempered_joint_new_per_coda)
+```
+
+```{r}
+para_temp_plot(adapt_tempered_joint_new_per, 5, N_para)
+```
 
 # bdregjump_adapt_tempered_new
 
@@ -148,12 +170,96 @@ adapt_tempered_joint_new <- foreach(i = 1:N_para) %dorng%
 load(file = "./report/report15/adapt_tempered_joint_new.RData")
 ```
 
+
+```{r}
+par(mfrow = c(3,2))
+for(k in 1:6){
+  plot(adapt_tempered_joint_new[[k]]$a_PT[2,1,1:5000], type = "l")
+for(i in 2:5){
+  lines(adapt_tempered_joint_new[[k]]$a_PT[2,i,1:5000], col = tcol(i,.5))
+}
+}
+```
+
+
 ## Trace plot
 
 ```{r temperednew, cache=TRUE}
-adapt_tempered_joint_new_coda <- multi_chain_parallel_coda(adapt_tempered_joint_new, burn=0, N_para, p, order)
+adapt_tempered_joint_new_coda <- multi_chain_parallel_coda(adapt_tempered_joint_new,
+                                                           burn=0, N_para, p, order,
+                                                           moreburn = 1000)
 
 plot(adapt_tempered_joint_new_coda)
+
+gelman.diag(adapt_tempered_joint_new_coda)
+
+adapt_tempered_joint_new[[1]]$a_PT[1,1,1001:5000]
+
+a_1_all <- c()
+for(k in 1:6){
+  a_1_all <- c(a_1_all, adapt_tempered_joint_new[[k]]$a_PT[1,1,1001:5000])
+}
+HPD(a_1_all)
+
+a_2_all <- c()
+for(k in 1:6){
+  a_1_all <- c(a_1_all, adapt_tempered_joint_new[[k]]$a_PT[1,1,1001:5000])
+}
+
+
+a_all_df <- NULL
+
+for(j in 1:6){
+  a_1_all <- c()
+  for(k in 1:6){
+  a_1_all <- c(a_1_all, adapt_tempered_joint_new[[k]]$a_PT[j,1,1001:5000])
+  }
+  a_all_df <- cbind(a_all_df, a_1_all)
+}
+
+apply(a_all_df, 2, HPD)
+
+colnames(a_all_df) <- paste0("a",1:6)
+a_all_mcmc <- mcmc(a_all_df)
+HPDinterval(a_all_mcmc)
+HPDinterval(a_all_mcmc, prob = 0.9)
+
+dens1 <- density(a_all_df[,1])
+plot(dens1)
+dens1$x[which.max(dens1$y)]
+hdi(dens1, allowSplit=TRUE, credMass = 0.9)
+
+dens2 <- density(a_all_df[,2])
+plot(dens2)
+dens2$x[which.max(dens2$y)]
+hdi(dens2, allowSplit=TRUE, credMass = 0.9)
+
+dens3 <- density(a_all_df[,3])
+plot(dens3)
+dens3$x[which.max(dens3$y)]
+hdi(dens3, allowSplit=TRUE, credMass = 0.9)
+
+dens4 <- density(a_all_df[,4])
+plot(dens4)
+dens4$x[which.max(dens4$y)]
+hdi(dens4, allowSplit=TRUE, credMass = 0.9)
+
+dens5 <- density(a_all_df[,5])
+plot(dens5)
+dens5$x[which.max(dens5$y)]
+hdi(dens5, allowSplit=TRUE, credMass = 0.9)
+
+dens6 <- density(a_all_df[,6])
+plot(dens6)
+dens6$x[which.max(dens6$y)]
+hdi(dens6, allowSplit=TRUE, credMass = 0.9)
+
+hdi(a_all_mcmc[,1], allowSplit=TRUE)
+hdi(a_all_mcmc[,2], allowSplit=TRUE)
+hdi(a_all_mcmc[,3], allowSplit=TRUE)
+hdi(a_all_mcmc[,4], allowSplit=TRUE)
+hdi(a_all_mcmc[,5], allowSplit=TRUE)
+hdi(a_all_mcmc[,6], allowSplit=TRUE)
 ```
 
 From the trace plot, we can see clear sign of swapping.
@@ -203,20 +309,72 @@ sapply(1:6, function(x) adapt_tempered_joint_new[[x]]$temp[,5000])
 ```
 
 
-# bdregjump_adapt_tempered_new, alpha_star_PT = 0.1
+# order = 5, parallel = 10
+
+```{r}
+set.seed(123)
+N_para <- 6
+p <- 6
+order <- 5
+L <- 10
+
+kbw <- 2/(order-1)
+knots <- seq(-1,1,kbw)
+bsd.sq <- (0.67*kbw)^2
+gausskern <- lapply(knots, function(mu) return(function(x) return(exp(-0.5*(x-mu)^2/bsd.sq))))
+get.poly.mat <- function(y) return(sapply(gausskern, function(f) f(y)))
+
+yFn <- get.poly.mat
+
+b_init <- replicate(N_para, 
+                    cbind(rnorm(n=5, sd=3), rnorm(n=5, sd=1.5), rnorm(n=5, sd=0.5),
+                          rnorm(n=5, sd=0.25), rnorm(n=5, sd=0.15), rnorm(n=5, sd=0.5))
+                    )
+a_init <- replicate(N_para, rnorm(n = p, sd = 1.5))
+```
+
 
 ```{r eval=FALSE}
-adapt_tempered_joint_new_alpha01 <- foreach(i = 1:N_para) %dorng%
-  bdregjump_adapt_tempered(y=y, x=x, b=b_init[,,i], burn=0, nsamp=5000, thin=1, order = 15,
+i =1 
+adapt_tempered_o5_p20 <-
+  bdregjump_adapt_tempered(y=y, x=x, b=b_init[,,i], burn=0, nsamp=500, thin=1, order = 5,
                      jump=list(a=a_init[,i], prec = 1, positive=pos.est,
                                persistence=0.68, update.jbw=FALSE),
-                     adap=list(parallel = 5, alpha_star_PT = 0.1))
+                     adap=list(parallel = 20, alpha_star_PT = 0.234),
+                     print.process = TRUE, print.temp = TRUE)
 ```
 
 ```{r}
-save(adapt_tempered_joint_new_alpha01, y, x, b_init, a_init, order,
-     file = "./report/report14/adapt_tempered_joint_new_alpha01.RData")
+save(adapt_tempered_o5_p20, y, x, b_init, a_init, order,
+     file = "./report/report15/adapt_tempered_o5_p20.RData")
 ```
+
+```{r}
+par(mfrow = c(3,2))
+for(i in 1:15){
+  for(j in 1:6){
+    plot(adapt_tempered_o5_p10$b[i,j,1:500], type = "l")
+  }
+}
+```
+
+```{r}
+for(i in 1:6){
+  plot(adapt_tempered_o5_p10$a_PT[i,1,1:500], type = "l")
+}
+```
+
+
+```{r eval=FALSE}
+i =1 
+adapt_tempered_o5_p20_alpha01 <-
+  bdregjump_adapt_tempered(y=y, x=x, b=b_init[,,i], burn=0, nsamp=500, thin=1, order = 5,
+                     jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.68, update.jbw=FALSE),
+                     adap=list(parallel = 20, rho_adap = -2, alpha_star_PT = 0.1),
+                     print.process = TRUE, print.temp = TRUE)
+```
+
 
 ```{r temperednew, cache=TRUE}
 adapt_tempered_joint_new_alpha01_coda <- multi_chain_parallel_coda(adapt_tempered_joint_new_alpha01, burn=0, N_para, p, order)
@@ -238,4 +396,259 @@ para_temp_plot(adapt_tempered_joint_new_alpha01, 5, N_para)
 
 ```{r}
 sapply(1:6, function(x) adapt_tempered_joint_new_alpha01[[x]]$temp[,5000])
+```
+
+
+```{r eval=FALSE}
+i =1 
+adapt_tempered_fix <-
+  bdregjump_adapt_tempered_fix(y=y, x=x, b=b_init[,,i], burn=0, nsamp=500, thin=1, order = 5,
+                     jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.68, update.jbw=FALSE),
+                     adap=list(parallel = 10, temp_end = 0.01),
+                     print.process = TRUE, print.swap = TRUE)
+```
+
+```{r}
+par(mfrow = c(3,2))
+for(i in 1:5){
+  for(j in 1:6){
+    plot(adapt_tempered_fix$b[i,j,1:500], type = "l")
+  }
+}
+```
+
+```{r}
+for(i in 1:6){
+  plot(adapt_tempered_fix$a_PT[i,1,1:500], type = "l")
+  for(l in 2:L){
+    lines(adapt_tempered_fix$a_PT[i,l,1:500], col=tcol(l,.5))
+  }
+}
+```
+
+
+```{r}
+par(mfrow = c(3,2))
+for(i in 1:5){
+  for(j in 1:6){
+    plot(adapt_tempered_o5_p20_alpha01$b[i,j,1:500], type = "l")
+  }
+}
+```
+
+```{r}
+for(i in 1:6){
+  plot(adapt_tempered_o5_p20_alpha01$a_PT[i,1,1:500], type = "l")
+  for(l in 2:L){
+    lines(adapt_tempered_o5_p20_alpha01$a_PT[i,l,1:500], col=tcol(l,.5))
+  }
+}
+```
+
+
+## one temp = 0.5
+
+```{r eval=FALSE}
+adapt_onetemp05 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_onetemp(y=y, x=x, b=b_init[,,i], burn=0, nsamp=5000, thin=1,
+                           order = 5, temp = 0.5,
+                     jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.68, update.jbw=FALSE))
+```
+
+
+```{r}
+save(adapt_onetemp05, y, x, b_init, a_init, order,
+     file = "./report/report15/adapt_onetemp05.RData")
+```
+
+```{r onetemp05, cache=TRUE}
+adapt_onetemp05_coda <- multi_chain_coda(adapt_onetemp05, burn=0, N_para, p, order)
+
+plot(adapt_onetemp05_coda)
+```
+
+
+## one temp = 0.1
+
+```{r eval=FALSE}
+adapt_onetemp01 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_onetemp(y=y, x=x, b=b_init[,,i], burn=0, nsamp=5000, thin=1,
+                           order = 5, temp = 0.1,
+                     jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.68, update.jbw=FALSE))
+```
+
+
+```{r}
+save(adapt_onetemp01, y, x, b_init, a_init, order,
+     file = "./report/report15/adapt_onetemp01.RData")
+```
+
+```{r onetemp05, cache=TRUE}
+adapt_onetemp01_coda <- multi_chain_coda(adapt_onetemp01, burn=0, N_para, p, order)
+
+plot(adapt_onetemp01_coda)
+```
+
+## one temp = 0.25
+
+```{r eval=FALSE}
+adapt_onetemp025 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_onetemp(y=y, x=x, b=b_init[,,i], burn=0, nsamp=5000, thin=1,
+                           order = 5, temp = 0.25,
+                     jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.68, update.jbw=FALSE))
+```
+
+
+```{r}
+save(adapt_onetemp025, y, x, b_init, a_init, order,
+     file = "./report/report15/adapt_onetemp025.RData")
+```
+
+```{r onetemp05, cache=TRUE}
+adapt_onetemp025_coda <- multi_chain_coda(adapt_onetemp025, burn=0, N_para, p, order)
+
+plot(adapt_onetemp025_coda)
+```
+
+## one temp = 0.01
+
+```{r eval=FALSE}
+adapt_onetemp001 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_onetemp(y=y, x=x, b=b_init[,,i], burn=0, nsamp=5000, thin=1,
+                           order = 5, temp = 0.01,
+                     jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.68, update.jbw=FALSE))
+```
+
+
+```{r}
+save(adapt_onetemp001, y, x, b_init, a_init, order,
+     file = "./report/report15/adapt_onetemp001.RData")
+```
+
+```{r onetemp05, cache=TRUE}
+adapt_onetemp001_coda <- multi_chain_coda(adapt_onetemp001, burn=0, N_para, p, order)
+
+plot(adapt_onetemp001_coda)
+```
+
+
+
+# order = 15
+
+## one temp = 0.25
+
+```{r eval=FALSE}
+adapt_onetemp025_o15 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_onetemp(y=y, x=x, b=b_init[,,i], burn=0, nsamp=5000, thin=1,
+                           order = 15, temp = 0.25,
+                     jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.68, update.jbw=FALSE))
+```
+
+
+```{r}
+save(adapt_onetemp025_o15, y, x, b_init, a_init, order,
+     file = "./report/report15/adapt_onetemp025_o15.RData")
+```
+
+```{r onetemp05, cache=TRUE}
+adapt_onetemp025_o15_coda <- multi_chain_coda(adapt_onetemp025_o15, burn=0, N_para, p, order)
+
+plot(adapt_onetemp025_o15_coda)
+```
+
+
+## one temp = 0.1
+
+```{r eval=FALSE}
+adapt_onetemp01_o15 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_onetemp(y=y, x=x, b=b_init[,,i], burn=0, nsamp=5000, thin=1,
+                           order = 15, temp = 0.1,
+                     jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.68, update.jbw=FALSE))
+```
+
+
+```{r}
+save(adapt_onetemp01_o15, y, x, b_init, a_init, order,
+     file = "./report/report15/adapt_onetemp01_o15.RData")
+```
+
+```{r onetemp05, cache=TRUE}
+adapt_onetemp01_o15_coda <- multi_chain_coda(adapt_onetemp01_o15, burn=0, N_para, p, order)
+
+plot(adapt_onetemp01_o15_coda)
+```
+
+
+```{r eval=FALSE}
+adapt_tempered_fix_multic <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_tempered_fix(y=y, x=x, b=b_init[,,i], burn=0, nsamp=4000,
+                               thin=1, order = 5,
+                     jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.68, update.jbw=FALSE),
+                     adap=list(parallel = 20,
+                               temp_end = 0.01),
+                     print.process = TRUE, print.swap = TRUE)
+```
+
+
+```{r}
+save(adapt_tempered_fix_multic, y, x, b_init, a_init, order,
+     file = "./report/report15/adapt_tempered_fix_multic.RData")
+```
+
+```{r onetemp05, cache=TRUE}
+adapt_tempered_fix_multic_coda <- multi_chain_parallel_coda(adapt_tempered_fix_multic, burn=0, N_para, p, order)
+
+plot(adapt_tempered_fix_multic_coda)
+```
+
+```{r}
+get.swap.ratio(adapt_tempered_fix_multic, L = 20)
+```
+
+
+
+```{r eval=FALSE}
+adapt_tempered_fix_multic2 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_tempered_fix(y=y, x=x, b=b_init[,,i], burn=0, nsamp=3500,
+                               thin=1, order = 15,
+                     jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.68, update.jbw=FALSE),
+                     adap=list(parallel = 20,
+                               temp_end = 0.01),
+                     print.process = TRUE, print.swap = TRUE)
+```
+
+```{r}
+save(adapt_tempered_fix_multic2, y, x, b_init, a_init, order,
+     file = "./report/report15/adapt_tempered_fix_multic2.RData")
+```
+
+```{r onetemp05, cache=TRUE}
+adapt_tempered_fix_multic2_coda <- multi_chain_parallel_coda(adapt_tempered_fix_multic2, burn=0, N_para, p, order)
+
+plot(adapt_tempered_fix_multic2_coda)
+```
+
+```{r}
+get.swap.ratio(adapt_tempered_fix_multic2, L = 20)
+```
+
+
+```{r}
+par(mfrow = c(3,2))
+for(i in 1:6){
+  for(k in 1:6){
+  plot(adapt_tempered_fix_multic2[[k]]$a_PT[i,20,1:3500], type = "l")
+  lines(adapt_tempered_fix_multic2[[k]]$a_PT[i,19,1:3500], col = tcol(i,.5))
+}
+}
+
 ```

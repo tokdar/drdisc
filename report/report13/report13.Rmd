@@ -97,3 +97,10 @@ log.hastings.ratio <- (temp * ( sum(dnorm(res.new,0,sqrt(1/pg.draws),log=TRUE)
 
 Should we add `temp` in the `get.miss.reject.x()` and `w.obs` to reflect
 different temperature configurations?
+
+
+
+
+$$
+\alpha(1, 2) = 1 \wedge \frac{p_1(y, y^*_2 | \theta_2) * p_2(y, y^*_1 | \theta_1)}{p_1(y, y^*_1 | \theta_1) * p_2(y, y^*_2 | \theta_2)}
+$$

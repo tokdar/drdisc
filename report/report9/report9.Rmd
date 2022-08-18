@@ -298,6 +298,21 @@ gelman.diag(adapt_order15_coda)
 
 ### update.jbw = FALSE
 
+
+```{r adapt_order15jbw, cache=TRUE}
+adapt_order15_jbw_noPG <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_noPG(y=y, x=x, b=b_init[,,i], burn=0, nsamp=2000, thin=1, order = 15,
+                  jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                            persistence=0.68, update.jbw=FALSE))
+```
+
+```{r}
+adapt_order15_jbw_noPG_coda <- multi_chain_coda(adapt_order15_jbw_noPG, burn=0, N_para, p, order)
+
+plot(adapt_order15_jbw_noPG_coda)
+```
+
+
 ```{r adapt_order15jbw, cache=TRUE}
 adapt_order15_jbw <- foreach(i = 1:N_para) %dorng%
   bdregjump_adapt(y=y, x=x, b=b_init[,,i], burn=2000, nsamp=10000, thin=1, order = 15,

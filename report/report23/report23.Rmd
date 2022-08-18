@@ -1,0 +1,213 @@
+---
+title: "report23"
+author: "Haoliang Zheng"
+date: "5/20/2021"
+output:
+  pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "/Users/zhl/Desktop/drdisc")
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(fig.align = 'center', 
+                      fig.width=6, fig.height=7)
+
+library(abind)
+library(knitr)
+library(latex2exp)
+require(magrittr)
+require(plyr)
+library(tidyverse)
+library(coda)
+library(doParallel)
+library(doMC) 
+library(foreach)
+library(doRNG)
+library(gridExtra)
+
+adapt <- FALSE
+bunch <- FALSE
+N_para <- 6
+
+registerDoMC(6)
+```
+
+
+```{r source, include=FALSE}
+source("./codes/new-codes.R")
+source("./codes/test-codes.R")
+source("./codes/other-codes.R")
+
+multi_chain_coda_noa <- function(result_multi, burn = 1000, N_para, p, order){
+  coda_result <- list()
+  matrix_result <- NULL
+  for(i in 1:N_para){
+    matrix_result <- NULL
+    for(j in 1:order){
+      for(k in 1:p){
+        bijk <- matrix(result_multi[[i]]$b[j,k,], ncol = 1)
+        colnames(bijk) <- paste0("b",j,k)
+        matrix_result <- cbind(matrix_result, bijk)
+      }
+    }
+    coda_result[[i]] <- mcmc(matrix_result, start = burn+1)
+  }
+  coda_result_list <- mcmc.list(coda_result)
+  
+  return(coda_result_list)
+}
+```
+
+# data
+
+```{r}
+vote <- read.csv("./codes/vote_data.csv")
+str(vote)
+vote <- subset(vote, abs(from_requirement_threshold) < 0.5)
+bunch <- FALSE
+pos.est <- TRUE
+N_para <- 6
+p <- 6
+```
+
+
+```{r}
+get.trim.data <- function(trim){
+  vote <- subset(vote, abs(from_requirement_threshold) < trim/2)
+  preds <- model.matrix(~ #major.requirement 
+                        + ISS.against.recommendation 
+                      #+ shares.oustanding.base 
+                      #+ special.meeting 
+                      + analyst.coverage 
+                      #+ institutional.ownership 
+                      + past.stock.return 
+                      + q 
+                      + firm.size, 
+                      data = vote)[,-1]
+  preds.all <- scale(preds)
+  x <- cbind(1, preds.all)
+  dimnames(x)[[2]][1] <- "Intercept"
+  x.names <- dimnames(x)[[2]]
+  y <- 2*vote[,"from_requirement_threshold"]
+  return(list(x=x, y=y))
+}
+
+get.result.CI <- function(result_trim07_order2,
+                          moreburn = 1,
+                          N_para = 6, p = 6){
+  nlast <- ncol(result_trim07_order2[[1]]$a)
+  result_CI_t7o2 <- data.frame()
+  for(i in 1:N_para){
+    one_set_r <- apply(result_trim07_order2[[i]]$a[,moreburn:nlast],
+                       1, function(x) quantile(x, c(0.025, 0.975)))
+    for(j in 1:p){
+      result_CI_t7o2 <- rbind(result_CI_t7o2,
+                              data.frame(lower = one_set_r[1,j],
+                                         upper = one_set_r[2,j],
+                                         variable = paste0("a", j),
+                                         setting = as.character(i)))
+      }
+    }
+  rownames(result_CI_t7o2) <- NULL
+  return(result_CI_t7o2)
+}
+```
+
+# order = 2
+
+## trimming = 0.5
+
+```{r}
+set.seed(123)
+order <- 2
+b_init <- replicate(N_para, matrix(rnorm(n = order*p, sd=1), order, p))
+a_init <- replicate(N_para, rnorm(n = p, sd = 1.5))
+
+data_trim05 <- get.trim.data(0.5)
+```
+
+
+```{r ,eval=FALSE}
+result_trim05_order2_more2 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_poly_trim_alphanoPG(y=data_trim05$y, x=data_trim05$x, b=b_init[,,i],
+                            burn=15000, nsamp=500000, thin=1, trim = 0.5, order = 2,
+                            jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.8, update.jbw=TRUE))
+```
+
+
+```{r}
+load("./report/report23/result_trim05_order2_more2.RData")
+result_CI_t5o2_more2 <- get.result.CI(result_trim05_order2_more2)
+
+p1 <- ggplot(result_CI_t5o2_more2, aes(x = variable, colour = setting)) +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2)
+
+p1
+
+result_CI_t5o2_more2 %>%
+  filter(variable == "a1")
+
+result_CI_t5o2_more2 %>%
+  filter(variable == "a2")
+
+result_CI_t5o2_more2 %>%
+  filter(variable == "a3")
+```
+
+
+# order = 3
+
+## trimming = 0.5
+
+```{r}
+set.seed(123)
+order <- 2
+b_init <- replicate(N_para, matrix(rnorm(n = order*p, sd=1), order, p))
+a_init <- replicate(N_para, rnorm(n = p, sd = 1.5))
+
+data_trim05 <- get.trim.data(0.5)
+```
+
+```{r ,eval=FALSE}
+result_trim05_order3_more2 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_poly_trim_alphanoPG(y=data_trim05$y, x=data_trim05$x, b=b_init[,,i],
+                            burn=15000, nsamp=500000, thin=1, trim = 0.5, order = 3,
+                            jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.8, update.jbw=TRUE))
+```
+
+
+```{r}
+load("./report/report23/result_trim05_order3_more2.RData")
+result_CI_t5o3_more2 <- get.result.CI(result_trim05_order3_more2)
+
+p2 <- ggplot(result_CI_t5o3_more2, aes(x = variable, colour = setting)) +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2)
+
+p2
+
+result_CI_t5o3_more2 %>%
+  filter(variable == "a1")
+
+result_CI_t5o3_more2 %>%
+  filter(variable == "a2")
+
+result_CI_t5o3_more2 %>%
+  filter(variable == "a6")
+```
+
+
+```{r}
+result_CI_t5o2_more2$type = "t5o2"
+result_CI_t5o3_more2$type = "t5o3"
+
+result_CI <- rbind(result_CI_t5o2_more2,
+                   result_CI_t5o3_more2)
+
+result_CI %>%
+  ggplot(aes(x = variable, colour = setting)) +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
+  facet_wrap(vars(type))
+```
+

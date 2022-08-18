@@ -1,0 +1,214 @@
+---
+title: "report21"
+author: "Haoliang Zheng"
+date: "5/12/2021"
+output:
+  pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "/Users/zhl/Desktop/drdisc")
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(fig.align = 'center', 
+                      fig.width=6, fig.height=7)
+
+library(abind)
+library(knitr)
+library(latex2exp)
+require(magrittr)
+require(plyr)
+library(tidyverse)
+library(coda)
+library(doParallel)
+library(doMC) 
+library(foreach)
+library(doRNG)
+
+adapt <- FALSE
+bunch <- FALSE
+N_para <- 6
+
+registerDoMC(6)
+```
+
+
+```{r source, include=FALSE}
+source("./codes/new-codes.R")
+source("./codes/test-codes.R")
+source("./codes/other-codes.R")
+
+multi_chain_coda_noa <- function(result_multi, burn = 1000, N_para, p, order){
+  coda_result <- list()
+  matrix_result <- NULL
+  for(i in 1:N_para){
+    matrix_result <- NULL
+    for(j in 1:order){
+      for(k in 1:p){
+        bijk <- matrix(result_multi[[i]]$b[j,k,], ncol = 1)
+        colnames(bijk) <- paste0("b",j,k)
+        matrix_result <- cbind(matrix_result, bijk)
+      }
+    }
+    coda_result[[i]] <- mcmc(matrix_result, start = burn+1)
+  }
+  coda_result_list <- mcmc.list(coda_result)
+  
+  return(coda_result_list)
+}
+```
+
+# data
+
+```{r}
+vote <- read.csv("./codes/vote_data.csv")
+str(vote)
+vote <- subset(vote, abs(from_requirement_threshold) < 0.5)
+bunch <- FALSE
+pos.est <- TRUE
+N_para <- 6
+p <- 6
+```
+
+
+```{r}
+get.trim.data <- function(trim){
+  vote <- subset(vote, abs(from_requirement_threshold) < trim/2)
+  preds <- model.matrix(~ #major.requirement 
+                        + ISS.against.recommendation 
+                      #+ shares.oustanding.base 
+                      #+ special.meeting 
+                      + analyst.coverage 
+                      #+ institutional.ownership 
+                      + past.stock.return 
+                      + q 
+                      + firm.size, 
+                      data = vote)[,-1]
+  preds.all <- scale(preds)
+  x <- cbind(1, preds.all)
+  dimnames(x)[[2]][1] <- "Intercept"
+  x.names <- dimnames(x)[[2]]
+  y <- 2*vote[,"from_requirement_threshold"]
+  return(list(x=x, y=y))
+}
+```
+
+
+```{r}
+set.seed(123)
+order <- 2
+b_init <- replicate(N_para, matrix(rnorm(n = order*p, sd=1), order, p))
+a_init <- replicate(N_para, rnorm(n = p, sd = 1.5))
+
+data_trim05 <- get.trim.data(0.5)
+```
+
+
+```{r}
+set.seed(123)
+order <- 2
+b_init <- replicate(N_para, matrix(rnorm(n = order*p, sd=1), order, p))
+a_init <- replicate(N_para, rnorm(n = p, sd = 1.5))
+
+data_trim05 <- get.trim.data(0.5)
+```
+
+
+```{r data, cache=TRUE}
+load("./report/report21/multi_adapt_poly_trim05_o2_3.RData")
+load("./report/report21/multi_adapt_poly_trim05_o2_alphanoPG3.RData")
+load("./report/report21/multi_adapt_poly_trim05_o2_allnoPG3.RData")
+```
+
+# traceplot
+
+## all_PG
+
+```{r}
+multi_adapt_poly_trim05_o2_3_coda <- multi_chain_coda(multi_adapt_poly_trim05_o2_3,
+                                                    burn = 5000, N_para, p, order = 2)
+plot(multi_adapt_poly_trim05_o2_3_coda)
+```
+
+## alphano_PG
+
+```{r}
+multi_adapt_poly_trim05_o2_alphanoPG3_coda <- multi_chain_coda(multi_adapt_poly_trim05_o2_alphanoPG3,
+                                                    burn = 5000, N_para, p, order = 2)
+plot(multi_adapt_poly_trim05_o2_alphanoPG3_coda)
+```
+
+# allno_PG
+
+```{r}
+multi_adapt_poly_trim05_o2_allnoPG3_coda <- multi_chain_coda(multi_adapt_poly_trim05_o2_allnoPG3,
+                                                    burn = 5000, N_para, p, order = 2)
+plot(multi_adapt_poly_trim05_o2_allnoPG3_coda)
+```
+
+# psrf
+
+```{r psrf, cache=TRUE}
+n_range <- seq(5000, 25000, 500)
+psrf_result <- data.frame()
+for(nl in n_range){
+  all_PG_coda <- multi_chain_coda_nol(multi_adapt_poly_trim05_o2_3,
+                                    burn = 5000, N_para, p, order = 2,
+                                    nlast = nl)
+  alphano_PG_coda <- multi_chain_coda_nol(multi_adapt_poly_trim05_o2_alphanoPG3,
+                                    burn = 5000, N_para, p, order = 2,
+                                    nlast = nl)
+  allno_PG_coda <- multi_chain_coda_nol(multi_adapt_poly_trim05_o2_allnoPG3,
+                                    burn = 5000, N_para, p, order = 2,
+                                    nlast = nl)
+  
+  all_PG_coda_onlya <- multi_chain_coda_nol_onlya(multi_adapt_poly_trim05_o2_3,
+                                    burn = 5000, N_para, p, order = 2,
+                                    nlast = nl)
+  alphano_PG_coda_onlya <- multi_chain_coda_nol_onlya(multi_adapt_poly_trim05_o2_alphanoPG3,
+                                    burn = 5000, N_para, p, order = 2,
+                                    nlast = nl)
+  allno_PG_coda_onlya <- multi_chain_coda_nol_onlya(multi_adapt_poly_trim05_o2_allnoPG3,
+                                    burn = 5000, N_para, p, order = 2,
+                                    nlast = nl)
+  
+  gd_result1 <- gelman.diag(all_PG_coda)
+  gd_result2 <- gelman.diag(alphano_PG_coda)
+  gd_result3 <- gelman.diag(allno_PG_coda)
+  
+  gd_result1_onlya <- gelman.diag(all_PG_coda_onlya)
+  gd_result2_onlya <- gelman.diag(alphano_PG_coda_onlya)
+  gd_result3_onlya <- gelman.diag(allno_PG_coda_onlya)
+  
+  psrf_result1 <- data.frame(value = gd_result1$psrf[,1], 
+             variable = rownames(gd_result1$psrf),
+             type = "all_PG", n = nl)
+  
+  psrf_result2 <- data.frame(value = gd_result2$psrf[,1], 
+             variable = rownames(gd_result2$psrf),
+             type = "alphano_PG", n = nl)
+  
+  psrf_result3 <- data.frame(value = gd_result3$psrf[,1], 
+             variable = rownames(gd_result3$psrf),
+             type = "allno_PG", n = nl)
+  
+  mpsrf_all_result <- data.frame(value = c(gd_result1$mpsrf, gd_result2$mpsrf, gd_result3$mpsrf),
+                                variable = "mpsrf_all", type = c("all_PG", "alphano_PG", "allno_PG"),
+                                n = nl)
+  
+  mpsrf_a_result <- data.frame(value = c(gd_result1_onlya$mpsrf,
+                                         gd_result2_onlya$mpsrf, gd_result3_onlya$mpsrf),
+                                variable = "mpsrf_a", type = c("all_PG", "alphano_PG", "allno_PG"),
+                                n = nl)
+  
+  psrf_result <- rbind(psrf_result, psrf_result1, psrf_result2, psrf_result3,
+                       mpsrf_all_result, mpsrf_a_result)
+}
+rownames(psrf_result) <- NULL
+```
+
+```{r fig.width=9, fig.height=8.5}
+ggplot(data = psrf_result) +
+  geom_line(aes(x = n, y = value, color = type)) +
+  facet_wrap(~variable, scales = "free_y")
+```
+

@@ -1,0 +1,158 @@
+---
+title: "report19"
+author: "Haoliang Zheng"
+date: "4/17/2021"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "/Users/zhl/Desktop/drdisc")
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(fig.align = 'center', 
+                      fig.width=6, fig.height=7)
+
+library(abind)
+library(knitr)
+library(latex2exp)
+require(magrittr)
+require(plyr)
+library(tidyverse)
+library(coda)
+library(doParallel)
+library(doMC) 
+library(foreach)
+library(doRNG)
+
+adapt <- FALSE
+bunch <- FALSE
+N_para <- 6
+
+registerDoMC(6)
+```
+
+
+```{r source, include=FALSE}
+source("./codes/new-codes.R")
+source("./codes/test-codes.R")
+source("./codes/other-codes.R")
+
+multi_chain_coda_noa <- function(result_multi, burn = 1000, N_para, p, order){
+  coda_result <- list()
+  matrix_result <- NULL
+  for(i in 1:N_para){
+    matrix_result <- NULL
+    for(j in 1:order){
+      for(k in 1:p){
+        bijk <- matrix(result_multi[[i]]$b[j,k,], ncol = 1)
+        colnames(bijk) <- paste0("b",j,k)
+        matrix_result <- cbind(matrix_result, bijk)
+      }
+    }
+    coda_result[[i]] <- mcmc(matrix_result, start = burn+1)
+  }
+  coda_result_list <- mcmc.list(coda_result)
+  
+  return(coda_result_list)
+}
+```
+
+# data
+
+```{r}
+vote <- read.csv("./codes/vote_data.csv")
+str(vote)
+vote <- subset(vote, abs(from_requirement_threshold) < 0.5)
+bunch <- FALSE
+pos.est <- TRUE
+N_para <- 6
+p <- 6
+```
+
+
+```{r}
+get.trim.data <- function(trim){
+  vote <- subset(vote, abs(from_requirement_threshold) < trim/2)
+  preds <- model.matrix(~ #major.requirement 
+                        + ISS.against.recommendation 
+                      #+ shares.oustanding.base 
+                      #+ special.meeting 
+                      + analyst.coverage 
+                      #+ institutional.ownership 
+                      + past.stock.return 
+                      + q 
+                      + firm.size, 
+                      data = vote)[,-1]
+  preds.all <- scale(preds)
+  x <- cbind(1, preds.all)
+  dimnames(x)[[2]][1] <- "Intercept"
+  x.names <- dimnames(x)[[2]]
+  y <- 2*vote[,"from_requirement_threshold"]
+  return(list(x=x, y=y))
+}
+```
+
+# adapt alpha, only alpha no PG, others not change
+
+## trim = 0.5, order = 2
+
+
+```{r}
+set.seed(123)
+order <- 2
+b_init <- replicate(N_para, matrix(rnorm(n = order*p, sd=1), order, p))
+a_init <- replicate(N_para, rnorm(n = p, sd = 1.5))
+
+data_trim05 <- get.trim.data(0.5)
+```
+
+```{r ,eval=FALSE}
+multi_adapt_poly_trim05_o2_alphanoPG2 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_poly_trim_alphanoPG(y=data_trim05$y, x=data_trim05$x, b=b_init[,,i],
+                            burn=5000, nsamp=10000, thin=1, trim = 0.5, order = 2,
+                            jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.8, update.jbw=FALSE))
+```
+
+
+```{r re1,cache=TRUE}
+load("./report/report19/multi_adapt_poly_trim05_o2_alphanoPG2.RData")
+
+multi_adapt_poly_trim05_o2_alphanoPG_coda2 <- multi_chain_coda(multi_adapt_poly_trim05_o2_alphanoPG2,
+                                                    burn = 5000, N_para, p, order = 2)
+plot(multi_adapt_poly_trim05_o2_alphanoPG_coda2)
+```
+
+
+
+# adapt alpha, all PG, not change
+
+
+```{r}
+set.seed(123)
+order <- 2
+b_init <- replicate(N_para, matrix(rnorm(n = order*p, sd=1), order, p))
+a_init <- replicate(N_para, rnorm(n = p, sd = 1.5))
+
+data_trim05 <- get.trim.data(0.5)
+```
+
+```{r , eval = FALSE}
+multi_adapt_poly_trim05_o2 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_poly_trim(y=data_trim05$y, x=data_trim05$x, b=b_init[,,i],
+                            burn=5000, nsamp=10000, thin=1, trim = 0.5, order = 2,
+                            jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.8, update.jbw=FALSE))
+```
+
+
+```{r re2, cache=TRUE}
+load("./report/report19/multi_adapt_poly_trim05_o2.RData")
+
+multi_adapt_poly_trim05_o2_coda <- multi_chain_coda(multi_adapt_poly_trim05_o2,
+                                                    burn = 5000, N_para, p, order = 2)
+
+plot(multi_adapt_poly_trim05_o2_coda)
+```

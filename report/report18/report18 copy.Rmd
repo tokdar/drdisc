@@ -1,0 +1,290 @@
+---
+title: "report18"
+author: "Haoliang Zheng"
+date: "4/11/2021"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "/Users/zhl/Desktop/drdisc")
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(fig.align = 'center', 
+                      fig.width=6, fig.height=7)
+
+library(abind)
+library(knitr)
+library(latex2exp)
+require(magrittr)
+require(plyr)
+library(tidyverse)
+library(coda)
+library(doParallel)
+library(doMC) 
+library(foreach)
+library(doRNG)
+
+adapt <- FALSE
+bunch <- FALSE
+N_para <- 6
+
+registerDoMC(6)
+```
+
+
+```{r source, include=FALSE}
+source("./codes/new-codes.R")
+source("./codes/test-codes.R")
+source("./codes/other-codes.R")
+
+multi_chain_coda_noa <- function(result_multi, burn = 1000, N_para, p, order){
+  coda_result <- list()
+  matrix_result <- NULL
+  for(i in 1:N_para){
+    matrix_result <- NULL
+    for(j in 1:order){
+      for(k in 1:p){
+        bijk <- matrix(result_multi[[i]]$b[j,k,], ncol = 1)
+        colnames(bijk) <- paste0("b",j,k)
+        matrix_result <- cbind(matrix_result, bijk)
+      }
+    }
+    coda_result[[i]] <- mcmc(matrix_result, start = burn+1)
+  }
+  coda_result_list <- mcmc.list(coda_result)
+  
+  return(coda_result_list)
+}
+```
+
+# data
+
+```{r}
+vote <- read.csv("./codes/vote_data.csv")
+str(vote)
+vote <- subset(vote, abs(from_requirement_threshold) < 0.5)
+bunch <- FALSE
+pos.est <- TRUE
+N_para <- 6
+p <- 6
+```
+
+
+```{r}
+get.trim.data <- function(trim){
+  vote <- subset(vote, abs(from_requirement_threshold) < trim/2)
+  preds <- model.matrix(~ #major.requirement 
+                        + ISS.against.recommendation 
+                      #+ shares.oustanding.base 
+                      #+ special.meeting 
+                      + analyst.coverage 
+                      #+ institutional.ownership 
+                      + past.stock.return 
+                      + q 
+                      + firm.size, 
+                      data = vote)[,-1]
+  preds.all <- scale(preds)
+  x <- cbind(1, preds.all)
+  dimnames(x)[[2]][1] <- "Intercept"
+  x.names <- dimnames(x)[[2]]
+  y <- 2*vote[,"from_requirement_threshold"]
+  return(list(x=x, y=y))
+}
+```
+
+
+# trim, no alpha
+
+## trim = 0.5
+
+
+```{r}
+set.seed(123)
+order <- 3
+b_init <- replicate(N_para, matrix(rnorm(n = order*p, sd=1), order, p))
+
+data_trim05 <- get.trim.data(0.5)
+```
+
+```{r eval=FALSE}
+noa_multi_poly_trim05 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_noa_poly_trim(y=data_trim05$y, x=data_trim05$x, b=b_init[,,i], burn=0, nsamp=500,
+                      thin=1, trim = 0.5)
+```
+
+
+```{r r1, cache=TRUE}
+load("./report/report18/noa_multi_poly_trim05.RData")
+noa_multi_poly_trim05_coda <- multi_chain_coda_noa(noa_multi_poly_trim05, burn = 0, N_para, p, order = order)
+
+plot(noa_multi_poly_trim05_coda)
+```
+
+## trim = 1, order = 3
+
+
+```{r}
+set.seed(123)
+order <- 3
+b_init <- replicate(N_para, matrix(rnorm(n = order*p, sd=1), order, p))
+
+data_trim1 <- get.trim.data(1)
+```
+
+```{r eval=FALSE}
+noa_multi_poly_trim1 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_noa_poly_trim(y=data_trim1$y, x=data_trim1$x, b=b_init[,,i], burn=0, nsamp=500,
+                      thin=1, trim = 1)
+```
+
+
+```{r r2, cache=TRUE}
+load("./report/report18/noa_multi_poly_trim1.RData")
+noa_multi_poly_trim1_coda <- multi_chain_coda_noa(noa_multi_poly_trim1, burn = 0, N_para, p, order = 3)
+
+plot(noa_multi_poly_trim1_coda)
+```
+
+
+## trim = 1, order = 2
+
+
+```{r}
+set.seed(123)
+order <- 2
+b_init <- replicate(N_para, matrix(rnorm(n = order*p, sd=1), order, p))
+
+data_trim1 <- get.trim.data(1)
+```
+
+```{r eval=FALSE}
+noa_multi_poly_trim1_o2 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_noa_poly_trim(y=data_trim1$y, x=data_trim1$x, b=b_init[,,i], burn=0, nsamp=500,
+                      thin=1, trim = 1, order = 2)
+```
+
+
+```{r r3, cache=TRUE}
+load("./report/report18/noa_multi_poly_trim1_o2.RData")
+noa_multi_poly_trim1_o2_coda <- multi_chain_coda_noa(noa_multi_poly_trim1_o2, burn = 0, N_para, p, order = order)
+
+plot(noa_multi_poly_trim1_o2_coda)
+```
+
+
+# adapt alpha
+
+## trim = 0.5, order = 2
+
+
+```{r}
+set.seed(123)
+order <- 2
+b_init <- replicate(N_para, matrix(rnorm(n = order*p, sd=1), order, p))
+a_init <- replicate(N_para, rnorm(n = p, sd = 1.5))
+
+data_trim05 <- get.trim.data(0.5)
+```
+
+```{r eval=FALSE}
+multi_adapt_poly_trim05_o2 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_poly_trim(y=data_trim05$y, x=data_trim05$x, b=b_init[,,i],
+                            burn=0, nsamp=5000, thin=1, trim = 0.5, order = 2,
+                            jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.8, update.jbw=FALSE))
+```
+
+
+```{r r4, cache=TRUE}
+load("./report/report18/multi_adapt_poly_trim05_o2.RData")
+multi_adapt_poly_trim05_o2_coda <- multi_chain_coda(multi_adapt_poly_trim05_o2, burn = 0, N_para, p, order = 2)
+
+plot(multi_adapt_poly_trim05_o2_coda)
+```
+
+## trim = 0.5, order = 3
+
+
+```{r}
+set.seed(123)
+order <- 3
+b_init <- replicate(N_para, matrix(rnorm(n = order*p, sd=1), order, p))
+a_init <- replicate(N_para, rnorm(n = p, sd = 1.5))
+
+data_trim05 <- get.trim.data(0.5)
+```
+
+```{r eval=FALSE}
+multi_adapt_poly_trim05_o3 <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_poly_trim(y=data_trim05$y, x=data_trim05$x, b=b_init[,,i],
+                            burn=0, nsamp=5000, thin=1, trim = 0.5, order = 3,
+                            jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.8, update.jbw=FALSE))
+```
+
+
+```{r rl1, cache=TRUE}
+load("./report/report18/multi_adapt_poly_trim05_o3.RData")
+multi_adapt_poly_trim05_o3_coda <- multi_chain_coda(multi_adapt_poly_trim05_o3, burn = 0, N_para, p, order = 3)
+
+plot(multi_adapt_poly_trim05_o3_coda)
+```
+
+
+## trim = 0.5, order = 2, update.jbw
+
+
+```{r}
+set.seed(123)
+order <- 2
+b_init <- replicate(N_para, matrix(rnorm(n = order*p, sd=1), order, p))
+a_init <- replicate(N_para, rnorm(n = p, sd = 1.5))
+
+data_trim05 <- get.trim.data(0.5)
+```
+
+```{r eval=FALSE}
+multi_adapt_poly_trim05_o2_jbw <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_poly_trim(y=data_trim05$y, x=data_trim05$x, b=b_init[,,i],
+                            burn=0, nsamp=5000, thin=1, trim = 0.5, order = 2,
+                            jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.8, update.jbw=TRUE))
+```
+
+
+```{r rl2, cache=TRUE}
+load("./report/report18/multi_adapt_poly_trim05_o2_jbw.RData")
+multi_adapt_poly_trim05_o2_jbw_coda <- multi_chain_coda(multi_adapt_poly_trim05_o2_jbw, burn = 0, N_para, p, order = 2)
+
+plot(multi_adapt_poly_trim05_o2_jbw_coda)
+```
+
+## trim = 0.5, order = 3, update.jbw
+
+
+```{r}
+set.seed(123)
+order <- 3
+b_init <- replicate(N_para, matrix(rnorm(n = order*p, sd=1), order, p))
+a_init <- replicate(N_para, rnorm(n = p, sd = 1.5))
+
+data_trim05 <- get.trim.data(0.5)
+```
+
+```{r eval=FALSE}
+multi_adapt_poly_trim05_o3_jbw <- foreach(i = 1:N_para) %dorng%
+  bdregjump_adapt_poly_trim(y=data_trim05$y, x=data_trim05$x, b=b_init[,,i],
+                            burn=0, nsamp=5000, thin=1, trim = 0.5, order = 3,
+                            jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                               persistence=0.8, update.jbw=TRUE))
+```
+
+
+```{r rl3, cache=TRUE}
+load("./report/report18/multi_adapt_poly_trim05_o3_jbw.RData")
+multi_adapt_poly_trim05_o3_jbw_coda <- multi_chain_coda(multi_adapt_poly_trim05_o3_jbw, burn = 0, N_para, p, order = 3)
+
+plot(multi_adapt_poly_trim05_o3_jbw_coda)
+```
