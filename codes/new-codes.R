@@ -1642,8 +1642,6 @@ bdregjump_adapt_poly_trim_alphanoPG <- function(y, x=1, b=NULL, nsamp=100, thin=
     mu_shape <- mu_shape + gamma_shape * shape_mu_diff
     Sigma_shape <- Sigma_shape + gamma_shape*(tcrossprod(shape_mu_diff, shape_mu_diff) - Sigma_shape)
     
-    print(shapes)
-    print(Sigma_shape)
     
     if(print.process) print(iter)
     
