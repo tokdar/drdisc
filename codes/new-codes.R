@@ -1326,7 +1326,7 @@ bdregjump_adapt_tempered <- function(y, x=1, b=NULL, nsamp=100, thin=1, burn=100
 # This is the most up-to-date codes for polynomial basis and trimming
 # In this function, I use truncdist package to draw truncated beta random variables due to the trimming
 # The function below "alphanoPG" means not conditional on polya-gamma random variable to draw alpha
-# Also, due to the trimming, tthe previous independence sampler can't work as before (I think)
+# Also, due to the trimming, the previous independence sampler can't work as before (I think)
 # So I use adaptive-metropolis to draw shape parameter. It seems to work based on my initial test
 
 bdregjump_adapt_poly_trim_alphanoPG <- function(y, x=1, b=NULL, nsamp=100, thin=1, burn=100,
