@@ -71,6 +71,13 @@ y.grid <- seq(-1,1,.01)
 
 get.poly.mat <- yFn
 
+rTruncBeta <- function(n, lb, ub, s1, s2) {
+  S0 <- pbeta(lb, s1, s2)
+  S1 <- pbeta(ub, s1, s2)
+  U <- runif(n, S0, S1)
+  return(qbeta(U, s1, s2))
+}
+
 ###### get.f and simulate.fx ######
 
 get.f <- function(b, a=0, sh=c(1,1), jbw=0.16, trim=1) {
@@ -94,8 +101,8 @@ simulate.fx <- function(n, b, x, a, shapes=c(1,1), jbw=0.16,
   ix.remain <- 1:n
   n.remain <- n
   while(n.remain > 0){
-    z <- 2*rtrunc(n.remain, "beta", a = (1-trim)/2, b = (1+trim)/2,
-                  shape1 = shapes[1], shape2 = shapes[2]) - 1
+    z <- 2*rTruncBeta(n.remain, lb = (1-trim)/2, ub = (1+trim)/2,
+                      s1 = shapes[1], s2 = shapes[2]) - 1
     pm <- matrix(yFn(z), nrow=n.remain)
     hk <- half.kern(z,jbw)
     x.remain <- x[ix.remain,,drop=FALSE]
@@ -314,12 +321,9 @@ bdreg <- function(y, x=1, b=NULL, nsamp=100, thin=1, burn=100, prec=1){
 ###### bdregjump ######
 
 beta.loglik <- function(shapes, yy, trim = 1){
-  if(trim == 1){
-    result <- sum(dbeta(yy, shapes[1], shapes[2], log=TRUE))
-  } else{
-    result <- sum(log(dtrunc(yy, "beta", a = (1-trim)/2, b = (1+trim)/2,
-                             shape1 = shapes[1], shape2 = shapes[2])))
-  }
+  n <- length(yy)
+  result <- sum(dbeta(yy, shapes[1], shapes[2], log=TRUE)) - 
+    n*log(pbeta((1+trim)/2, shapes[1], shapes[2]) - pbeta((1-trim)/2, shapes[1], shapes[2]))
   return(result)
 }
 beta.loglik2 <- function(bp, yy, trim) beta.loglik(bp[2]*plogis(bp[1]*c(1,-1)), yy, trim)
@@ -1408,13 +1412,17 @@ bdregjump_adapt_poly_trim_alphanoPG <- function(y, x=1, b=NULL, nsamp=100, thin=
   diff_prev <- burn_i_count <- sample_i_count <- 0
   
   beta.loglik <- function(shapes, yy, trim = 1){
-    if(trim == 1){
-      result <- sum(dbeta(yy, shapes[1], shapes[2], log=TRUE))
-    } else{
-      result <- sum(log(dtrunc(yy, "beta", a = (1-trim)/2, b = (1+trim)/2,
-                               shape1 = shapes[1], shape2 = shapes[2])))
-    }
+    n <- length(yy)
+    result <- sum(dbeta(yy, shapes[1], shapes[2], log=TRUE)) - 
+      n*log(pbeta((1+trim)/2, shapes[1], shapes[2]) - pbeta((1-trim)/2, shapes[1], shapes[2]))
     return(result)
+  }
+  
+  rTruncBeta <- function(n, lb, ub, s1, s2) {
+    S0 <- pbeta(lb, s1, s2)
+    S1 <- pbeta(ub, s1, s2)
+    U <- runif(n, S0, S1)
+    return(qbeta(U, s1, s2))
   }
   
   ## get.miss.reject.x ##
@@ -1435,8 +1443,8 @@ bdregjump_adapt_poly_trim_alphanoPG <- function(y, x=1, b=NULL, nsamp=100, thin=
     n.remain <- n
     ix.remain <- 1:n
     while(n.remain > 0){
-      z <- 2*rtrunc(n.remain, "beta", a = (1-trim)/2, b = (1+trim)/2,
-                    shape1 = shapes[1], shape2 = shapes[2]) - 1
+      z <- 2*rTruncBeta(n.remain, lb = (1-trim)/2, ub = (1+trim)/2,
+                        s1 = shapes[1], s2 = shapes[2]) - 1
       pm <- matrix(yFn(z), nrow=n.remain)
       hk <- half.kern(z,jbw)
       x.remain <- x[ix.remain,,drop=FALSE]
