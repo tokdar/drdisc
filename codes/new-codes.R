@@ -1389,7 +1389,7 @@ bdregjump_adapt_poly_trim_alphanoPG <- function(y, x=1, b=NULL, nsamp=100, thin=
   if(is.null(chol.pivot)) chol.pivot <- FALSE
   
   mu_shape <- rep(0,2)
-  Sigma_shape <- diag(2)
+  Sigma_shape <- 0.01 * diag(2)
   
   Poly.obs <- get.poly.mat(y)
   b.store <- array(NA, dim=c(order, p, nsamp))
