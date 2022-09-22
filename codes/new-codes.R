@@ -1389,7 +1389,7 @@ bdregjump_adapt_poly_trim_alphanoPG <- function(y, x=1, b=NULL, nsamp=100, thin=
   if(is.null(chol.pivot)) chol.pivot <- FALSE
   
   mu_shape <- rep(0,2)
-  Sigma_shape <- 0.01 * diag(2)
+  Sigma_shape <- diag(2)
   
   Poly.obs <- get.poly.mat(y)
   b.store <- array(NA, dim=c(order, p, nsamp))
@@ -1634,7 +1634,7 @@ bdregjump_adapt_poly_trim_alphanoPG <- function(y, x=1, b=NULL, nsamp=100, thin=
     log_has_shape <- beta.loglik(shapes_new, beta.y, trim) + sum(shapes_log_new) -
       beta.loglik(shapes, beta.y, trim) - sum(shapes_log)
     
-    if(log(runif(1)) < log_has_shape){
+    if(log(runif(1)) < log_has_shape & !any(shapes_new < 0.05)){
       shapes <- shapes_new
       shapes_log <- shapes_log_new
       nacpt.bp <- nacpt.bp+1
