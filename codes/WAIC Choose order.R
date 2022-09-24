@@ -187,38 +187,39 @@ WAIC2 <- function(y.obs, x.obs, chain, positive=T, usen, trim){
 ## order 2 = true order
 
 time.stamp.0 <- proc.time()
-res = WAIC1(y.obs, x.obs, sim_notrim_order2[[1]], positive=T, 1000, 1)
-res
+WAIC1(y.obs, x.obs, sim_notrim_order2[[1]], positive=T, 1000, 1)
 run.time <- proc.time() - time.stamp.0
 run.time
 # 5141.406  3.09h
-
-time.stamp.0 <- proc.time()
-WAIC1(y.obs, x.obs, sim_notrim_order3[[1]], positive=T, 1000, 1)
-run.time <- proc.time() - time.stamp.0
-run.time
-# 5144.017  3.57h
-
-time.stamp.0 <- proc.time()
-WAIC1(y.obs, x.obs, sim_notrim_order2[[2]], positive=T, 1000, 1)
-run.time <- proc.time() - time.stamp.0
-run.time
-# 5141.045  3.27h
- 
-time.stamp.0 <- proc.time()
-WAIC1(y.obs, x.obs, sim_notrim_order3[[2]], positive=T, 1000, 1)
-run.time <- proc.time() - time.stamp.0
-run.time
-# 5143.613 3.57h
-
-## order 3
 
 time.stamp.0 <- proc.time()
 WAIC2(y.obs, x.obs, sim_notrim_order2[[1]], positive=T, 1000, 1)
 run.time <- proc.time() - time.stamp.0
 run.time
 # 5149.791  3.08h
+                         
+time.stamp.0 <- proc.time()
+WAIC1(y.obs, x.obs, sim_notrim_order2[[2]], positive=T, 1000, 1)
+run.time <- proc.time() - time.stamp.0
+run.time
+# 5141.045  3.27h
 
+time.stamp.0 <- proc.time()
+WAIC2(y.obs, x.obs, sim_notrim_order2[[2]], positive=T, 1000, 1)
+run.time <- proc.time() - time.stamp.0
+run.time
+# 5149.08  3.30h
+             
+
+
+## order 3
+
+time.stamp.0 <- proc.time()
+WAIC1(y.obs, x.obs, sim_notrim_order3[[1]], positive=T, 1000, 1)
+run.time <- proc.time() - time.stamp.0
+run.time
+# 5144.017  3.57h
+             
 time.stamp.0 <- proc.time()
 WAIC2(y.obs, x.obs, sim_notrim_order3[[1]], positive=T, 1000, 1)
 run.time <- proc.time() - time.stamp.0
@@ -226,10 +227,10 @@ run.time
 # 5155.026 3.60h
 
 time.stamp.0 <- proc.time()
-WAIC2(y.obs, x.obs, sim_notrim_order2[[2]], positive=T, 1000, 1)
+WAIC1(y.obs, x.obs, sim_notrim_order3[[2]], positive=T, 1000, 1)
 run.time <- proc.time() - time.stamp.0
 run.time
-# 5149.08  3.30h
+# 5143.613 3.57h
 
 time.stamp.0 <- proc.time()
 WAIC2(y.obs, x.obs, sim_notrim_order3[[2]], positive=T, 1000, 1)
