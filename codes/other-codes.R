@@ -204,6 +204,112 @@ get.result.bdregjump <- function(fit.x, x.obs, y.obs, b0x, a0,
   cat("accperatnce rate:", round(100*fit.x$acpt), "%\n")
 }
 
+get.result.bdregjump.new <- function(fit.x, x.obs, y.obs, b0x, a0,
+                                 trim = 1, thin_index=NULL){
+  ############################################################  
+  ###### accommodate true order not equal to fitted order#####
+  ###### add true parameters = 0 for redundant dimensions#####
+  ############################################################
+  
+  y.grid <- seq(-trim, trim, .01)
+  cat("Runtime", round(fit.x$runtime[3]), "seconds\n")
+  if(is.null(thin_index)){
+    b.est <- fit.x$b
+    a.est <- fit.x$a
+    shapes.est <- fit.x$shapes
+    jbw.est <- fit.x$jbw
+  }else{
+    b.est <- fit.x$b[,,thin_index]
+    a.est <- fit.x$a[,thin_index]
+    shapes.est <- fit.x$shapes[,thin_index]
+    jbw.est <- fit.x$jbw[thin_index]
+  }
+  
+  p <- dim(fit.x$b)[2]
+  order <- dim(b.est)[1]
+  # plot1
+  par(mfrow = c(p,2))
+  
+  for(j in 1:p){
+    boxplot(data.frame(b=t(b.est[,j,]),a=a.est[j,]), col=tcol(1+1:(1+order),.3), border=tcol(1+1:(1+order),.7),
+            main = paste0("predictor", j))
+    grid()
+    points(c(b0x[,j], rep(0, order - nrow(b0x)) ,a0[j]), pch="+", cex=2)
+  }
+  
+  # plot2
+  
+  plot(a.est[1,],ty="l", ylim=range(a.est), ylab="a", xlab="MCMC draw", main = TeX("traceplot of $\\alpha$"))
+  for(i in 1:length(a0)) lines(a.est[i,], col=tcol(i,.5), lwd=2)
+  abline(h = a0, lty=2, col=1:length(a0))
+  
+  plot(jbw.est, ty="l", xlab="MCMC draw", ylab="jump bw", col=tcol(1,.5), lwd=2, main = TeX("traceplot of $\\lambda$"))
+  abline(h = jbw0, lty=2)
+  
+  cat("Estimated jump persistence (true=", pers0, ")\n", round(quantile(jbw.est, c(0.025, .25,.5,.75, 0.975))/0.32,2), "\n")
+  
+  # plot3
+  par(mfrow = c(2,2))
+  xnew <- rep(1,4)
+  for(i in 1:(p-1)) xnew <- cbind(xnew, seq(-2,2,1.25))
+  nnew <- nrow(xnew)
+  xb0 <- tcrossprod(xnew, b0x)
+  xa0 <- c(xnew %*% a0)
+  if(pos.synth) xa0 <- pmax(0, xa0)
+  lpoly <- list(
+    #  Vectorize(function(x) return(1/sqrt(2)), "x"), ## k = 0
+    function(x) return(sqrt(3/2)*x), ## k = 1
+    function(x) return(sqrt(5/8)*(3*x^2 - 1)), ## k = 2
+    function(x) return(sqrt(7/8)*(5*x^3 - 3*x)) ## k = 3
+  )
+  lpoly <- lpoly[1:ncol(b0x)]
+  get.poly.mat <- function(y) return(sapply(lpoly, function(f) f(y)))
+  yFn <- get.poly.mat
+  wFn <- function(y, beta, alpha=0, bw=0.16) return(c(matrix(yFn(y), nrow=length(y)) %*% beta) + alpha*half.kern(y,bw))
+  fFn <- function(y, shapes=c(1,1), trim=1, ...) return((1/2)*dtrunc((y+1)/2, "beta", a = (1-trim)/2, b = (1+trim)/2,
+                                                                     shape1 = shapes[1], shape2 = shapes[2])*Phi(wFn(y, ...)))
+  get.f <- function(b, a=0, sh=c(1,1), jbw=0.16, trim=1) {
+    y.grid <- seq(-trim, trim, .01)
+    f.grid <- fFn(y.grid, trim=trim, beta=b, alpha=a, shapes=sh, bw=jbw)
+    normalization.const <- (integrate(fFn, -trim, 0, beta=b, alpha=a, shapes=sh, bw=jbw, trim = trim)$value
+                            + integrate(fFn, 0, trim, beta=b, alpha=a, shapes=sh, bw=jbw, trim = trim)$value)
+
+    return(f.grid/normalization.const)
+  }
+  f0x <- sapply(1:nnew, function(i) get.f(b=xb0[i,],a=xa0[i], sh=shapes0, jbw=jbw0,
+                                          trim=trim))
+  
+  nsamp <- ncol(a.est)
+  for(cl in 1:4){
+    ix.cl <- abs(x.obs[,2] - xnew[cl,2]) < 0.25
+    hist(y.obs[ix.cl], freq=FALSE, main="", xlab="Y", xlim=c(-trim,trim))
+    ylim <- par("usr")[3:4]
+    xb <- apply(b.est, 3, function(b) tcrossprod(xnew[cl,,drop=FALSE], b))
+    xa <- c(xnew[cl,,drop=FALSE] %*% a.est)
+    if(pos.est) xa <- pmax(xa, 0)
+    lpoly <- list(
+      #  Vectorize(function(x) return(1/sqrt(2)), "x"), ## k = 0
+      function(x) return(sqrt(3/2)*x), ## k = 1
+      function(x) return(sqrt(5/8)*(3*x^2 - 1)), ## k = 2
+      function(x) return(sqrt(7/8)*(5*x^3 - 3*x)) ## k = 3
+    )
+    lpoly <- lpoly[1:order]
+    fx <- sapply(1:nsamp, function(s) get.f(b=xb[,s],a=xa[s],sh=shapes.est[,s],jbw=jbw.est[s],
+                                            trim=trim))
+    for(s in 1:nsamp) lines(y.grid, fx[,s], col=tcol(2,.5))
+    lines(y.grid, rowMeans(fx), col=4, lwd=2)
+    lines(y.grid, f0x[,cl], lwd=2)
+    drop_pos <- trim/0.01
+    dropx <- 1-fx[drop_pos,]/fx[drop_pos+1,]
+    drop.est <- round(100*median(dropx))
+    drop.ci <- round(100*quantile(dropx, pr=c(.025,.975)))
+    text(-1, ylim[2]*0.9, bquote('Drop%'==.(drop.est)[paste("[",.(drop.ci[1]),",",.(drop.ci[2]),"]")]), pos=4)
+  }
+  
+  cat("accperatnce rate:", round(100*fit.x$acpt), "%\n")
+}
+                 
+                 
 get.result.data <- function(fit.x, x.obs, y.obs, b0x, a0, thin_index=NULL){
   x <- x.obs
   cat("Runtime", round(fit.x$runtime[3]), "seconds\n")
