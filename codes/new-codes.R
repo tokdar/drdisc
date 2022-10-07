@@ -1635,7 +1635,7 @@ bdregjump_adapt_poly_trim_alphanoPG <- function(y, x=1, b=NULL, nsamp=100, thin=
     log_has_shape <- beta.loglik(shapes_new, beta.y, trim) + sum(shapes_log_new) + sum(dgamma(shapes_new, a.shapes, b.shapes, log = T)) -
       beta.loglik(shapes, beta.y, trim) - sum(shapes_log) - sum(dgamma(shapes, a.shapes, b.shapes, log = T))
     
-    if(log(runif(1)) < log_has_shape){
+    if(log(runif(1)) < log_has_shape & !any(shapes_new < 0.05)){
       shapes <- shapes_new
       shapes_log <- shapes_log_new
       nacpt.bp <- nacpt.bp+1
