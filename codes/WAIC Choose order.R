@@ -1,4 +1,4 @@
- ######################## WAIC ##########################################
+######################### WAIC ##########################################
 ##          simulate data with order 2 (no trimming data/trimming data)
 ##          run model with order 2 and 3
 ##          use two type of WAICs to compare order
@@ -104,162 +104,58 @@ WAIC <- function(y.obs, x.obs, chain, positive=T, usen, trim){
 #################### no trimming order = 2 = true order ####################
 
 load("~/Desktop/Density Estimation/Github code 9-14/report/report24/sim_notrim_order2.RData")
-
-order = 2
-time.stamp.0 <- proc.time()
-res = WAIC(y.obs, x.obs, sim_notrim_order2[[1]], positive=T, 1000, 1)
-res
-run.time <- proc.time() - time.stamp.0
-run.time
-# 5143.273 5152.375.  3.04h
-
-time.stamp.0 <- proc.time()
-res2 = WAIC(y.obs, x.obs, sim_notrim_order2[[2]], positive=T, 1000, 1)
-res2
-run.time <- proc.time() - time.stamp.0
-run.time
-# 5142.829 5151.546
-
-time.stamp.0 <- proc.time()
-res3 = WAIC(y.obs, x.obs, sim_notrim_order2[[3]], positive=T, 1000, 1)
-res3
-run.time <- proc.time() - time.stamp.0
-run.time
-# 5140.928 5148.544
-
-time.stamp.0 <- proc.time()
-res4 = WAIC(y.obs, x.obs, sim_notrim_order2[[4]], positive=T, 1000, 1)
-res4
-run.time <- proc.time() - time.stamp.0
-run.time
-# 5142.225 5150.903
-
-time.stamp.0 <- proc.time()
-res5 = WAIC(y.obs, x.obs, sim_notrim_order2[[5]], positive=T, 1000, 1)
-res5
-run.time <- proc.time() - time.stamp.0
-run.time
-# 5141.499 5149.395
-
-
-time.stamp.0 <- proc.time()
-res6 = WAIC(y.obs, x.obs, sim_notrim_order2[[6]], positive=T, 1000, 1)
-res6
-run.time <- proc.time() - time.stamp.0
-run.time
-# 5143.010 5151.806
+n_chain = 10
+no_cores <- detectCores() 
+registerDoMC(no_cores)
+res <- foreach(i = 1:n_chain) %dorng% WAIC(y.obs, x.obs, sim_notrim_order2[[i]], positive=T, usen = 1000, trim = 1)
+colMeans(matrix(unlist(res), ncol = 2, byrow = T))
+# 5142.700 5151.393
 
 #################### no trimming order = 3 > true order=2 ####################
 
-
 load("~/Desktop/Density Estimation/Github code 9-14/report/report24/sim_notrim_order3.RData")
+n_chain = 10
+no_cores <- detectCores()
+registerDoMC(no_cores)
+res1 <- foreach(i = 1:n_chain) %dorng% WAIC(y.obs, x.obs, sim_notrim_order3[[i]], positive=T, usen = 1000, trim = 1)
+colMeans(matrix(unlist(res1), ncol = 2, byrow = T))
+# 5144.021 5154.260
 
-time.stamp.0 <- proc.time()
-res = WAIC(y.obs, x.obs, sim_notrim_order3[[1]], positive=T, 1000, 1)
-res
-run.time <- proc.time() - time.stamp.0
-run.time
-# 5144.440 5155.418
-
-time.stamp.0 <- proc.time()
-res2 = WAIC(y.obs, x.obs, sim_notrim_order3[[2]], positive=T, 1000, 1)
-res2
-run.time <- proc.time() - time.stamp.0
-run.time
-# 5144.482 5154.484
-
-time.stamp.0 <- proc.time()
-res3 = WAIC(y.obs, x.obs, sim_notrim_order3[[3]], positive=T, 1000, 1)
-res3
-run.time <- proc.time() - time.stamp.0
-run.time
-# 5144.563 5155.208
-
-time.stamp.0 <- proc.time()
-res4 = WAIC(y.obs, x.obs, sim_notrim_order3[[4]], positive=T, 1000, 1)
-res4
-run.time <- proc.time() - time.stamp.0
-run.time
-# 5143.959 5154.276
-
-time.stamp.0 <- proc.time()
-res5 = WAIC(y.obs, x.obs, sim_notrim_order3[[5]], positive=T, 1000, 1)
-res5
-run.time <- proc.time() - time.stamp.0
-run.time
-# 5144.346 5154.914
-
-
-time.stamp.0 <- proc.time()
-res6 = WAIC(y.obs, x.obs, sim_notrim_order3[[6]], positive=T, 1000, 1)
-res6
-run.time <- proc.time() - time.stamp.0
-run.time
-# 5145.010 5155.733
-
-
-
-#################### trimming 0.5 ####################
+#################### trimming 0.5 order = 2 ####################
 
 trim05_ind <- (abs(y.obs) < 0.5)
 sim_data_trim05_y <- y.obs[trim05_ind]
 sim_data_trim05_x <- x.obs[trim05_ind,]
 
 
-# load("~/Desktop/Density Estimation/Github code 9-14/report/report24/sim_trim05_order2_new.RData")
-# time.stamp.0 <- proc.time()
-# WAIC1(sim_data_trim05_y, sim_data_trim05_x, sim_trim05_order2_new[[1]], positive=T, 1000, .5)
-# run.time <- proc.time() - time.stamp.0
-# run.time
-# # -19898.84 0.39h
-# 
-# time.stamp.0 <- proc.time()
-# WAIC2(sim_data_trim05_y, sim_data_trim05_x, sim_trim05_order2_new[[1]], positive=T, 1000, .5)
-# run.time <- proc.time() - time.stamp.0
-# run.time
-# # -19892.03 0.40h
-# 
-# time.stamp.0 <- proc.time()
-# WAIC1(sim_data_trim05_y, sim_data_trim05_x, sim_trim05_order2_new[[2]], positive=T, 1000, .5)
-# run.time <- proc.time() - time.stamp.0
-# run.time
-# # -19901.76 0.40h
-# 
-# 
-# time.stamp.0 <- proc.time()
-# WAIC2(sim_data_trim05_y, sim_data_trim05_x, sim_trim05_order2_new[[2]], positive=T, 1000, .5)
-# run.time <- proc.time() - time.stamp.0
-# run.time
-# # -19893.61  0.39h
-# 
-# 
-# ## order 3
-# 
-# load("~/Desktop/Density Estimation/Github code 9-14/report/report24/sim_trim05_order3_new1.RData")
-# 
-# time.stamp.0 <- proc.time()
-# WAIC1(sim_data_trim05_y, sim_data_trim05_x, sim_trim05_order3_new1, positive=T, 1000, .5)
-# run.time <- proc.time() - time.stamp.0
-# run.time
-# # -19902.01  0.42h
-# 
-# time.stamp.0 <- proc.time()
-# WAIC2(sim_data_trim05_y, sim_data_trim05_x, sim_trim05_order3_new1, positive=T, 1000, .5)
-# run.time <- proc.time() - time.stamp.0
-# run.time
-# # -19893.44 0.42h
-# 
-# load("~/Desktop/Density Estimation/Github code 9-14/report/report24/sim_trim05_order3_new2.RData")
-# 
-# time.stamp.0 <- proc.time()
-# WAIC1(sim_data_trim05_y, sim_data_trim05_x, sim_trim05_order3_new2, positive=T, 1000, .5)
-# run.time <- proc.time() - time.stamp.0
-# run.time
-# # -19899.54  0.42h
-# 
-# time.stamp.0 <- proc.time()
-# WAIC2(sim_data_trim05_y, sim_data_trim05_x, sim_trim05_order3_new2, positive=T, 1000, .5)
-# run.time <- proc.time() - time.stamp.0
-# run.time
-# # -19891.09 0.40h
-# 
+load("~/Desktop/Density Estimation/Github code 9-14/report/report24/sim_trim05_order2_new.RData")
+n_chain = 10
+no_cores <- detectCores()
+registerDoMC(no_cores)
+res2 <- foreach(i = 1:n_chain) %dorng% WAIC(sim_data_trim05_y, sim_data_trim05_x, sim_trim05_order2_new[[i]], positive=T, usen = 1000, trim = 0.5)
+colMeans(matrix(unlist(res2), ncol = 2, byrow = T))
+# -19899.56 -19892.22
+
+#################### trimming 0.5 order = 2 ####################
+
+load("~/Desktop/Density Estimation/Github code 9-14/report/report24/sim_trim05_order3_new.RData")
+n_chain = 10
+no_cores <- detectCores()
+registerDoMC(no_cores)
+res3 <- foreach(i = 1:n_chain) %dorng% WAIC(sim_data_trim05_y, sim_data_trim05_x, sim_trim05_order3_new[[i]], positive=T, usen = 1000, trim = 0.5)
+colMeans(matrix(unlist(res3), ncol = 2, byrow = T))
+# -19897.73 -19888.63
+
+######################### WAIC ##########################################
+##          If we want to gfit no-trimming model and  evaluate the WAIC 
+##          of the same trimmed data, try following code
+#########################################################################
+
+registerDoMC(no_cores)
+res4 <- foreach(i = 1:n_chain) %dorng% WAIC(sim_data_trim05_y, sim_data_trim05_x, sim_notrim_order2[[i]], positive=T, usen = 1000, trim = 1)
+colMeans(matrix(unlist(res4), ncol = 2, byrow = T))
+
+
+registerDoMC(no_cores)
+res5 <- foreach(i = 1:n_chain) %dorng% WAIC(sim_data_trim05_y, sim_data_trim05_x, sim_notrim_order3[[i]], positive=T, usen = 1000, trim = 1)
+colMeans(matrix(unlist(res5), ncol = 2, byrow = T))
