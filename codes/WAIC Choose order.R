@@ -104,7 +104,7 @@ WAIC <- function(y.obs, x.obs, chain, positive=T, usen, trim){
 #################### no trimming order = 2 = true order ####################
 
 load("~/Desktop/Density Estimation/Github code 9-14/report/report24/sim_notrim_order2.RData")
-n_chain = 10
+n_chain = length(sim_notrim_order2)
 no_cores <- detectCores() 
 registerDoMC(no_cores)
 res <- foreach(i = 1:n_chain) %dorng% WAIC(y.obs, x.obs, sim_notrim_order2[[i]], positive=T, usen = 1000, trim = 1)
@@ -114,7 +114,7 @@ colMeans(matrix(unlist(res), ncol = 2, byrow = T))
 #################### no trimming order = 3 > true order=2 ####################
 
 load("~/Desktop/Density Estimation/Github code 9-14/report/report24/sim_notrim_order3.RData")
-n_chain = 10
+n_chain = length(sim_notrim_order3)
 no_cores <- detectCores()
 registerDoMC(no_cores)
 res1 <- foreach(i = 1:n_chain) %dorng% WAIC(y.obs, x.obs, sim_notrim_order3[[i]], positive=T, usen = 1000, trim = 1)
@@ -129,7 +129,7 @@ sim_data_trim05_x <- x.obs[trim05_ind,]
 
 
 load("~/Desktop/Density Estimation/Github code 9-14/report/report24/sim_trim05_order2_new.RData")
-n_chain = 10
+n_chain = length(sim_trim05_order2_new)
 no_cores <- detectCores()
 registerDoMC(no_cores)
 res2 <- foreach(i = 1:n_chain) %dorng% WAIC(sim_data_trim05_y, sim_data_trim05_x, sim_trim05_order2_new[[i]], positive=T, usen = 1000, trim = 0.5)
@@ -139,7 +139,7 @@ colMeans(matrix(unlist(res2), ncol = 2, byrow = T))
 #################### trimming 0.5 order = 2 ####################
 
 load("~/Desktop/Density Estimation/Github code 9-14/report/report24/sim_trim05_order3_new.RData")
-n_chain = 10
+n_chain = length(sim_trim05_order3_new)
 no_cores <- detectCores()
 registerDoMC(no_cores)
 res3 <- foreach(i = 1:n_chain) %dorng% WAIC(sim_data_trim05_y, sim_data_trim05_x, sim_trim05_order3_new[[i]], positive=T, usen = 1000, trim = 0.5)
