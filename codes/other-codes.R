@@ -198,7 +198,7 @@ get.result.bdregjump <- function(fit.x, x.obs, y.obs, b0x, a0,
     dropx <- 1-fx[drop_pos,]/fx[drop_pos+1,]
     drop.est <- round(100*median(dropx))
     drop.ci <- round(100*quantile(dropx, pr=c(.025,.975)))
-    text(-1, ylim[2]*0.9, bquote('Drop%'==.(drop.est)[paste("[",.(drop.ci[1]),",",.(drop.ci[2]),"]")]), pos=4)
+    text(-trim, ylim[2]*0.9, bquote('Drop%'==.(drop.est)[paste("[",.(drop.ci[1]),",",.(drop.ci[2]),"]")]), pos=4)
   }
   
   cat("accperatnce rate:", round(100*fit.x$acpt), "%\n")
@@ -227,14 +227,21 @@ get.result.bdregjump.new <- function(fit.x, x.obs, y.obs, b0x, a0,
   
   p <- dim(fit.x$b)[2]
   order <- dim(b.est)[1]
+  true.order <- nrow(b0x)
+  
   # plot1
   par(mfrow = c(p,2))
   
   for(j in 1:p){
     boxplot(data.frame(b=t(b.est[,j,]),a=a.est[j,]), col=tcol(1+1:(1+order),.3), border=tcol(1+1:(1+order),.7),
-            main = paste0("predictor", j))
+            main = paste0("predictor", j), ylim = c(min(b0x[1:true.order,j], b.est[,j,], a.est[j,], a0[j]), 
+                                                    max(b0x[1:true.order,j],b.est[,j,], a.est[j,], a0[j]))))
     grid()
-    points(c(b0x[,j], rep(0, order - nrow(b0x)) ,a0[j]), pch="+", cex=2)
+    if(order > true.order){
+      points(c(b0x[,j], rep(0, order - nrow(b0x)) ,a0[j]), pch="+", cex=2)
+    } else {
+      points(c(b0x[1:order,j] ,a0[j]), pch="+", cex=2)
+    }
   }
   
   # plot2
@@ -287,13 +294,16 @@ get.result.bdregjump.new <- function(fit.x, x.obs, y.obs, b0x, a0,
     xb <- apply(b.est, 3, function(b) tcrossprod(xnew[cl,,drop=FALSE], b))
     xa <- c(xnew[cl,,drop=FALSE] %*% a.est)
     if(pos.est) xa <- pmax(xa, 0)
-    lpoly <- list(
-      #  Vectorize(function(x) return(1/sqrt(2)), "x"), ## k = 0
-      function(x) return(sqrt(3/2)*x), ## k = 1
-      function(x) return(sqrt(5/8)*(3*x^2 - 1)), ## k = 2
-      function(x) return(sqrt(7/8)*(5*x^3 - 3*x)) ## k = 3
+    lpoly_all <- list(
+    #  Vectorize(function(x) return(1/sqrt(2)), "x"), ## k = 0
+    function(x) return(sqrt(3/2)*x), ## k = 1
+    function(x) return(sqrt(5/8)*(3*x^2 - 1)), ## k = 2
+    function(x) return(sqrt(7/8)*(5*x^3 - 3*x)), ## k = 3
+    function(x) return(sqrt(9/8)*(35*x^4 - 30*x^2 + 3)) ## k = 4
     )
-    lpoly <- lpoly[1:order]
+    
+    lpoly <- lpoly_all[1:nrow(b0x)]
+    
     fx <- sapply(1:nsamp, function(s) get.f(b=xb[,s],a=xa[s],sh=shapes.est[,s],jbw=jbw.est[s],
                                             trim=trim))
     for(s in 1:nsamp) lines(y.grid, fx[,s], col=tcol(2,.5))
