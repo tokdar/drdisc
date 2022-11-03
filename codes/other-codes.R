@@ -263,13 +263,13 @@ get.result.bdregjump.new <- function(fit.x, x.obs, y.obs, b0x, a0,
   xb0 <- tcrossprod(xnew, b0x)
   xa0 <- c(xnew %*% a0)
   if(pos.synth) xa0 <- pmax(0, xa0)
-  lpoly <- list(
+  lpoly_all <- list(
     #  Vectorize(function(x) return(1/sqrt(2)), "x"), ## k = 0
     function(x) return(sqrt(3/2)*x), ## k = 1
     function(x) return(sqrt(5/8)*(3*x^2 - 1)), ## k = 2
     function(x) return(sqrt(7/8)*(5*x^3 - 3*x)) ## k = 3
   )
-  lpoly <- lpoly[1:ncol(b0x)]
+  lpoly <- lpoly_all[1:true.order]
   get.poly.mat <- function(y) return(sapply(lpoly, function(f) f(y)))
   yFn <- get.poly.mat
   wFn <- function(y, beta, alpha=0, bw=0.16) return(c(matrix(yFn(y), nrow=length(y)) %*% beta) + alpha*half.kern(y,bw))
