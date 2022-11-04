@@ -27,7 +27,7 @@ lpoly_all <- list(
   function(x) return(sqrt(3/2)*x), ## k = 1
   function(x) return(sqrt(5/8)*(3*x^2 - 1)), ## k = 2
   function(x) return(sqrt(7/8)*(5*x^3 - 3*x)), ## k = 3
-  function(x) return(sqrt(9/8)*(35*x^4 - 30*x^2 + 3)) ## k = 4
+  function(x) return(sqrt(9/128)*(35*x^4 - 30*x^2 + 3)) ## k = 4
 )
 
 lpoly <- lpoly_all[1:order]
