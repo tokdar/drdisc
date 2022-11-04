@@ -72,8 +72,15 @@ if(simulate){
   p <- 2
   n.obs <- 2e4
   b0x <- cbind(b0, threshold(rt(order, df=6),1))
+  b0x[1,1] <-  -0.9706636
+  b0x[1,2] <-  0
   b0x[2,1] <-  -15
+  b0x[2,2] <-  -1.329144
+  b0x[2,2] <-  -15
+  b0x[3,1] <-  -0.9773
+  b0x[3,2] <-  0
   b0x[4,1] <-  0.5
+  b0x[4,2] <-  -1.770323
   while(ncol(b0x) < p) b0x <- cbind(b0x, 0)
   a0 <- c(1, 4, rep(0,p-2))
   shapes0 <- c(4,1)
