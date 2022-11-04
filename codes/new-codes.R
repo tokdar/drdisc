@@ -43,7 +43,7 @@ lpoly_all <- list(
   function(x) return(sqrt(3/2)*x), ## k = 1
   function(x) return(sqrt(5/8)*(3*x^2 - 1)), ## k = 2
   function(x) return(sqrt(7/8)*(5*x^3 - 3*x)), ## k = 3
-  function(x) return(sqrt(9/8)*(35*x^4 - 30*x^2 + 3)) ## k = 4
+  function(x) return(sqrt(9/128)*(35*x^4 - 30*x^2 + 3)) ## k = 4
 )
 lpoly <- lpoly_all[1:order]
 
@@ -1348,7 +1348,7 @@ bdregjump_adapt_poly_trim_alphanoPG <- function(y, x=1, b=NULL, nsamp=100, thin=
     function(x) return(sqrt(3/2)*x), ## k = 1
     function(x) return(sqrt(5/8)*(3*x^2 - 1)), ## k = 2
     function(x) return(sqrt(7/8)*(5*x^3 - 3*x)), ## k = 3
-    function(x) return(sqrt(9/8)*(35*x^4 - 30*x^2 + 3)) ## k = 4
+    function(x) return(sqrt(9/128)*(35*x^4 - 30*x^2 + 3)) ## k = 4
   )
   lpoly <- lpoly[1:order]
   get.poly.mat <- function(y) return(sapply(lpoly, function(f) f(y)))
