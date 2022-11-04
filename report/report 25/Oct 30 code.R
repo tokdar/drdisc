@@ -70,7 +70,7 @@ simulate <- TRUE
 if(simulate){
   set.seed(123)
   p <- 2
-  n.obs <- 2e4
+  n.obs <- 1e4
   b0x <- cbind(b0, threshold(rt(order, df=6),1))
   b0x[1,1] <-  -0.9706636
   b0x[1,2] <-  0
