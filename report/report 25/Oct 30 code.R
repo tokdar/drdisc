@@ -31,39 +31,39 @@ lpoly_all <- list(
 )
 
 lpoly <- lpoly_all[1:order]
-# ypoly <- function(y) return(sapply(lpoly, function(f) f(y)))
-# kbw <- 0.5
-# knots <- seq(-1,1,kbw)
-# bsd.sq <- (0.67*kbw)^2
-# gausskern <- lapply(knots, function(mu) return(function(x) return(exp(-0.5*(x-mu)^2/bsd.sq))))
-# ykern <- function(y) return(sapply(gausskern, function(f) f(y)))
-# 
-# nbw <- 0.25
-# knots <- seq(-1, 1, nbw)
-# ns.basis <- ns(knots, knots=knots[-extreme(knots)])
-# yns <- function(y) return(predict(ns.basis, y))
-# fn.types <- list(poly=ypoly, kern=ykern, ns=yns)
-# yFn <- fn.types[[type]]
-# wFn <- function(y, beta, alpha=0, bw=0.16) return(c(matrix(yFn(y), nrow=length(y)) %*% beta) + alpha*half.kern(y,bw))
-# Phi <- function(x) plogis(x)
-# fFn <- function(y, shapes=c(1,1), trim=1, ...) return((1/2)*dtrunc((y+1)/2, "beta", a = (1-trim)/2, b = (1+trim)/2,
-#                                                                    shape1 = shapes[1], shape2 = shapes[2])*Phi(wFn(y, ...)))
-# 
-# y.grid <- seq(-1,1,.01)
-# p0 <- c(.4, .5, .1)
-# shape1 <- c(10, .1, .1)
-# shape2 <- c(10, 100, 100)
-# get.f0 <- function(y) return((p0[1]*dbeta((y+1)/2,shape1[1],shape2[1])
-#                               + p0[2]*dbeta((y+1)/2,shape1[2],shape2[2])
-#                               + p0[3]*dbeta((y+1)/2,shape1[3],shape2[2]))/2)
-# f0 <- get.f0(y.grid)
-# h2.loss <- function(b){
-#   f.nc <- integrate(fFn, -1, 1, beta=b)$value
-#   return(integrate(function(y) (sqrt(fFn(y, beta=b)/f.nc) - sqrt(get.f0(y)))^2,-1,1)$value)
-# }
-# best.fit <- optim(rep(0,order), h2.loss, method="BFGS")
-# b0 <- best.fit$par
-# f0b <- get.f(b0)
+ypoly <- function(y) return(sapply(lpoly, function(f) f(y)))
+kbw <- 0.5
+knots <- seq(-1,1,kbw)
+bsd.sq <- (0.67*kbw)^2
+gausskern <- lapply(knots, function(mu) return(function(x) return(exp(-0.5*(x-mu)^2/bsd.sq))))
+ykern <- function(y) return(sapply(gausskern, function(f) f(y)))
+
+nbw <- 0.25
+knots <- seq(-1, 1, nbw)
+ns.basis <- ns(knots, knots=knots[-extreme(knots)])
+yns <- function(y) return(predict(ns.basis, y))
+fn.types <- list(poly=ypoly, kern=ykern, ns=yns)
+yFn <- fn.types[[type]]
+wFn <- function(y, beta, alpha=0, bw=0.16) return(c(matrix(yFn(y), nrow=length(y)) %*% beta) + alpha*half.kern(y,bw))
+Phi <- function(x) plogis(x)
+fFn <- function(y, shapes=c(1,1), trim=1, ...) return((1/2)*dtrunc((y+1)/2, "beta", a = (1-trim)/2, b = (1+trim)/2,
+                                                                   shape1 = shapes[1], shape2 = shapes[2])*Phi(wFn(y, ...)))
+
+y.grid <- seq(-1,1,.01)
+p0 <- c(.4, .5, .1)
+shape1 <- c(10, .1, .1)
+shape2 <- c(10, 100, 100)
+get.f0 <- function(y) return((p0[1]*dbeta((y+1)/2,shape1[1],shape2[1])
+                              + p0[2]*dbeta((y+1)/2,shape1[2],shape2[2])
+                              + p0[3]*dbeta((y+1)/2,shape1[3],shape2[2]))/2)
+f0 <- get.f0(y.grid)
+h2.loss <- function(b){
+  f.nc <- integrate(fFn, -1, 1, beta=b)$value
+  return(integrate(function(y) (sqrt(fFn(y, beta=b)/f.nc) - sqrt(get.f0(y)))^2,-1,1)$value)
+}
+best.fit <- optim(rep(0,order), h2.loss, method="BFGS")
+b0 <- best.fit$par
+f0b <- get.f(b0)
 
 simulate <- TRUE
 ## Density regression with jump
@@ -72,12 +72,8 @@ if(simulate){
   p <- 2
   n.obs <- 2e4
   b0x <- cbind(b0, threshold(rt(order, df=6),1))
-  b0x[1,1] <- -1
-  b0x[2,1] <-  -10
-  b0x[3,1] <- -1
-  b0x[2,2] <-  5
+  b0x[2,1] <-  -15
   b0x[4,1] <-  0.5
-  b0x[4,2] <-  -1
   while(ncol(b0x) < p) b0x <- cbind(b0x, 0)
   a0 <- c(1, 4, rep(0,p-2))
   shapes0 <- c(4,1)
@@ -85,7 +81,7 @@ if(simulate){
   jbw0 <- 0.16*2*pers0
   pos.synth <- TRUE
   pos.est <- TRUE
-  
+
   x.obs <- cbind(1, matrix(rnorm(n.obs*(p-1)), n.obs, p-1))
   y.obs <- simulate.fx(n.obs, b0x, x.obs, a0, shapes0, jbw0, positive=pos.synth)
 }
