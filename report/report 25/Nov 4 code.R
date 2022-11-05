@@ -83,7 +83,7 @@ if(simulate){
   b0x[4,1] <-  0.5
   b0x[4,2] <-  -1.770323
   while(ncol(b0x) < p) b0x <- cbind(b0x, 0)
-  a0 <- c(1, 4, rep(0,p-2))
+  a0 <- c(2, 4, rep(0,p-2))
   shapes0 <- c(4,1)
   pers0 <- 1/2
   jbw0 <- 0.16*2*pers0
