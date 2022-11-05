@@ -108,21 +108,21 @@ save.image(names)
 load(names)
 
 ###################### no trimming order 2,3,4 ####################
-N_para <- 10
-set.seed(seed)
-registerDoMC(N_para)
-order = 2
-p = dim(x.obs)[2]
-b_init <- replicate(N_para, matrix(rnorm(n = order*p, sd = 3), order, p))
-a_init <- replicate(N_para, rnorm(n = p, sd = 3))
-sim_notrim_order2_10k<- foreach(i = 1:N_para) %dorng% 
-  bdregjump_adapt_poly_trim_alphanoPG(y=y.obs, x=x.obs,
-                                      b=b_init[,,i], burn=20000, nsamp=10000,
-                                      thin=1, trim = 1, order = order, prec=0.1,
-                                      jump=list(a=a_init[,i], prec = 1, positive=T,
-                                                persistence=0.5, update.jbw=TRUE))
-names = paste0("./", "sim_notrim_order2_10k seed ", seed, ".RData")
-save(sim_notrim_order2_10k, file = names)
+# N_para <- 10
+# set.seed(seed)
+# registerDoMC(N_para)
+# order = 2
+# p = dim(x.obs)[2]
+# b_init <- replicate(N_para, matrix(rnorm(n = order*p, sd = 3), order, p))
+# a_init <- replicate(N_para, rnorm(n = p, sd = 3))
+# sim_notrim_order2_10k<- foreach(i = 1:N_para) %dorng% 
+#   bdregjump_adapt_poly_trim_alphanoPG(y=y.obs, x=x.obs,
+#                                       b=b_init[,,i], burn=20000, nsamp=10000,
+#                                       thin=1, trim = 1, order = order, prec=1,
+#                                       jump=list(a=a_init[,i], prec = 1, positive=T,
+#                                                 persistence=0.5, update.jbw=TRUE))
+# names = paste0("./", "sim_notrim_order2_10k seed ", seed, ".RData")
+# save(sim_notrim_order2_10k, file = names)
 
 set.seed(seed)
 order <- 3
@@ -133,7 +133,7 @@ b_init <- replicate(N_para, matrix(rnorm(n = order*p, sd=1), order, p))
 a_init <- replicate(N_para, rnorm(n = p, sd = 1.5))
 sim_notrim_order3_10k <- foreach(i = 1:N_para) %dorng% bdregjump_adapt_poly_trim_alphanoPG(y=y.obs, x=x.obs,
                                                                                            b=b_init[,,i], burn=20000, nsamp=10000,
-                                                                                           thin=1, trim = 1, order = order, prec = 0.1,
+                                                                                           thin=1, trim = 1, order = order, prec = 1,
                                                                                            jump=list(a=a_init[,i], prec = 1, positive=T,
                                                                                                      persistence=0.5, update.jbw=TRUE))
 names = paste0("./", "sim_notrim_order3_10k seed ", seed, ".RData")
@@ -150,7 +150,7 @@ a_init <- replicate(N_para, rnorm(n = p, sd = 3))
 sim_notrim_order4_10k<- foreach(i = 1:N_para) %dorng%
   bdregjump_adapt_poly_trim_alphanoPG(y=y.obs, x=x.obs,
                                       b=b_init[,,i], burn=20000, nsamp=10000,
-                                      thin=1, trim = 1, order = order, prec = 0.1,
+                                      thin=1, trim = 1, order = order, prec = 1,
                                       jump=list(a=a_init[,i], prec = 1, positive=T,
                                                 persistence=0.5, update.jbw=TRUE))
 names = paste0("./", "sim_notrim_order4_10k seed ", seed, ".RData")
@@ -158,20 +158,20 @@ save(sim_notrim_order4_10k, file = names)
 
 ################################# trimming #####################################
 
-order = 2
-N_para <- 10
-registerDoMC(N_para)
-p = dim(x.obs)[2]
-b_init <- replicate(N_para, matrix(rnorm(n = order*p, sd=1), order, p))
-a_init <- replicate(N_para, rnorm(n = p, sd = 1.5))
-sim_trim05_order2_10k <- foreach(i = 1:N_para) %dorng% 
-  bdregjump_adapt_poly_trim_alphanoPG(y=sim_data_trim05_y, x=sim_data_trim05_x, 
-                                      b=b_init[,,i], prec = 0.1, burn=25000, nsamp=15000, 
-                                      thin=1, trim = 0.5, shapes = c(2,2), order = order,
-                                      jump=list(a=a_init[,i], prec = 1, positive=T,
-                                                persistence=0.5,update.jbw=TRUE))
-names = paste0("./", "sim_trim05_order2_10k seed ", seed, ".RData")
-save(sim_trim05_order2_10k, file = names)
+# order = 2
+# N_para <- 10
+# registerDoMC(N_para)
+# p = dim(x.obs)[2]
+# b_init <- replicate(N_para, matrix(rnorm(n = order*p, sd=1), order, p))
+# a_init <- replicate(N_para, rnorm(n = p, sd = 1.5))
+# sim_trim05_order2_10k <- foreach(i = 1:N_para) %dorng% 
+#   bdregjump_adapt_poly_trim_alphanoPG(y=sim_data_trim05_y, x=sim_data_trim05_x, 
+#                                       b=b_init[,,i], prec = 1, burn=25000, nsamp=15000, 
+#                                       thin=1, trim = 0.5, shapes = c(2,2), order = order,
+#                                       jump=list(a=a_init[,i], prec = 1, positive=T,
+#                                                 persistence=0.5,update.jbw=TRUE))
+# names = paste0("./", "sim_trim05_order2_10k seed ", seed, ".RData")
+# save(sim_trim05_order2_10k, file = names)
 
 
 order = 3
