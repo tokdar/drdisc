@@ -1,6 +1,3 @@
-rm(list = ls())
-setwd("~/Desktop/Density Estimation/Github code 3-16/drdisc-main/")
-
 library(abind)
 library(knitr)
 library(latex2exp)
@@ -9,10 +6,10 @@ require(plyr)
 library(tidyverse)
 library(coda)
 library(doParallel)
-library(doMC)
 library(foreach)
 library(doRNG)
 library(gridExtra)
+library(BayesLogit)
 
 adapt <- FALSE
 bunch <- FALSE
@@ -100,7 +97,7 @@ sim_data_trim05_x <- x.obs[trim05_ind,]
 hist(sim_data_trim05_y, main = 'Trimmed Data')
 length(sim_data_trim05_y)
 
-names = paste0("./", "Mar 16 setup seed", seed, ".RData")
+names = paste0("./Mar_16_20k/", "Mar 16 setup seed", seed, ".RData")
 save.image(names)
 load(names)
 
@@ -113,17 +110,24 @@ my_summary <- function(x){
 set.seed(seed)
 order <- 2
 N_para <- 10
-registerDoMC(5)
+cl <- makeCluster(10)
+registerDoParallel(cl)
 p = dim(x.obs)[2]
 b_init <- replicate(N_para, matrix(rnorm(n = order*p, sd=1), order, p))
 a_init <- replicate(N_para, rnorm(n = p, sd = 1.5))
-sim_notrim_order2_60k <- foreach(i = 1:N_para) %dorng% bdregjump_adapt_poly_trim_alphanoPG(y=y.obs, x=x.obs,
-                                                                                           b=b_init[,,i], burn=30000, nsamp=20000,
-                                                                                           thin=1, trim = 1, order = order, prec = 1,
-                                                                                           jump=list(a=a_init[,i], prec = 1, positive=T,
-                                                                                                     persistence=0.5, update.jbw=TRUE))
+
+sim_notrim_order2_60k <- foreach(i = 1:N_para,
+                                 .packages='BayesLogit') %dorng% 
+  bdregjump_adapt_poly_trim_alphanoPG(y=y.obs, x=x.obs,
+                                      b=b_init[,,i], burn=30000, nsamp=20000,
+                                      thin=1, trim = 1, order = order, prec = 1,
+                                      jump=list(a=a_init[,i], prec = 1, positive=T,
+                                                persistence=0.5, update.jbw=TRUE))
+
+
 names = paste0("./Mar_16_20k/sim_notrim_order2_60k_seed_", seed, ".RData")
 save(sim_notrim_order2_60k, file = names)
+
 order = 2
 sim_notrim_order2_60k_coda <- multi_chain_coda(sim_notrim_order2_60k, burn = 30000, N_para, p, order = order)
 gelman.diag(sim_notrim_order2_60k_coda)
@@ -139,3 +143,6 @@ round(sapply(1:N_para, function(x) rowMeans(sim_notrim_order2_60k[[x]]$b[,1,])),
 round(sapply(1:N_para, function(x) rowMeans(sim_notrim_order2_60k[[x]]$b[,2,])), 3)
 round(sapply(1:N_para, function(x) mean(sim_notrim_order2_60k[[x]]$jbw)), 3)
 round(sapply(1:N_para, function(x) rowMeans(sim_notrim_order2_60k[[x]]$shapes)), 3)
+
+
+stopCluster(cl)

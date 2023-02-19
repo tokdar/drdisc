@@ -1,0 +1,105 @@
+# package
+
+library(abind)
+library(knitr)
+library(latex2exp)
+require(magrittr)
+require(plyr)
+library(tidyverse)
+library(coda)
+library(doParallel)
+library(foreach)
+library(doRNG)
+library(gridExtra)
+library(BayesLogit)
+
+# source
+
+adapt <- FALSE
+bunch <- FALSE
+N_para <- 10
+seed <- 3
+
+# stopCluster(cl)
+cl <- makeCluster(10)
+registerDoParallel(cl)
+
+source("./codes/new-codes.R")
+source("./codes/test-codes.R")
+source("./codes/other-codes.R")
+
+# helper function
+
+get.trim.data <- function(trim){
+  vote <- subset(vote, abs(from_requirement_threshold) < trim/2)
+  preds <- model.matrix(~ #major.requirement 
+                          + ISS.against.recommendation 
+                        #+ shares.oustanding.base 
+                        #+ special.meeting 
+                        + analyst.coverage 
+                        #+ institutional.ownership 
+                        + past.stock.return 
+                        + q 
+                        + firm.size, 
+                        data = vote)[,-1]
+  preds.all <- scale(preds)
+  x <- cbind(1, preds.all)
+  dimnames(x)[[2]][1] <- "Intercept"
+  x.names <- dimnames(x)[[2]]
+  y <- 2*vote[,"from_requirement_threshold"]
+  return(list(x=x, y=y))
+}
+
+get.result.CI <- function(result_trim07_order2, N_para = 6, p = 6){
+  result_CI_t7o2 <- data.frame()
+  for(i in 1:N_para){
+    one_set_r <- apply(result_trim07_order2[[i]]$a, 1, function(x) quantile(x, c(0.025, 0.975)))
+    for(j in 1:p){
+      result_CI_t7o2 <- rbind(result_CI_t7o2,
+                              data.frame(lower = one_set_r[1,j],
+                                         upper = one_set_r[2,j],
+                                         variable = paste0("a", j),
+                                         setting = as.character(i)))
+    }
+  }
+  rownames(result_CI_t7o2) <- NULL
+  return(result_CI_t7o2)
+}
+
+# real data
+
+vote <- read.csv("./codes/vote_data.csv")
+str(vote)
+vote <- subset(vote, abs(from_requirement_threshold) < 0.5)
+bunch <- FALSE
+pos.est <- TRUE
+p <- 6
+
+
+################################# Model #######################################
+
+# order = 2
+
+## trimming = 1
+
+
+set.seed(seed)
+order <- 2
+b_init <- replicate(N_para, matrix(rnorm(n = order*p, sd=1), order, p))
+a_init <- replicate(N_para, rnorm(n = p, sd = 1.5))
+
+data_notrim <- get.trim.data(1)
+
+realdata_notrim_order2 <- foreach(i = 1:N_para,
+                                 .packages='BayesLogit') %dorng% 
+  bdregjump_adapt_poly_trim_alphanoPG(y=data_notrim$y, x=data_notrim$x,
+                                      b=b_init[,,i], burn=15000, nsamp=25000,
+                                      thin=1, trim = 1, order = order, prec = 1,
+                                      jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                                                persistence=0.5, update.jbw=TRUE))
+
+
+names = paste0("./real_data_result/Feb_19/realdata_notrim_order2_40k_seed_", seed, ".RData")
+save(realdata_notrim_order2, file = names)
+
+stopCluster(cl)
