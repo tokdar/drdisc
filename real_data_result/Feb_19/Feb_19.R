@@ -12,6 +12,7 @@ library(foreach)
 library(doRNG)
 library(gridExtra)
 library(BayesLogit)
+par(mar=c(2,2,2,2))
 
 # source
 
@@ -78,10 +79,9 @@ p <- 6
 
 ################################# Model #######################################
 
-# order = 2
+################## order = 2 ##################
 
 ## trimming = 1
-
 
 set.seed(seed)
 order <- 2
@@ -102,4 +102,64 @@ realdata_notrim_order2 <- foreach(i = 1:N_para,
 names = paste0("./real_data_result/Feb_19/realdata_notrim_order2_40k_seed_", seed, ".RData")
 save(realdata_notrim_order2, file = names)
 
+
+realdata_notrim_order2_coda <- multi_chain_coda(realdata_notrim_order2,
+                                                burn = 15000, N_para, p, order = 2)
+plot(realdata_notrim_order2_coda)
+gelman.diag(realdata_notrim_order2_coda)
+summary(realdata_notrim_order2_coda)
+
+realdata_CI_nto2 <- get.result.CI(realdata_notrim_order2, N_para, p)
+
+## trimming = 0.5
+
+set.seed(seed)
+order <- 2
+b_init <- replicate(N_para, matrix(rnorm(n = order*p, sd=1), order, p))
+a_init <- replicate(N_para, rnorm(n = p, sd = 1.5))
+
+data_trim05 <- get.trim.data(0.5)
+
+realdata_trim05_order2 <- foreach(i = 1:N_para,
+                                  .packages='BayesLogit') %dorng% 
+  bdregjump_adapt_poly_trim_alphanoPG(y=data_trim05$y, x=data_trim05$x,
+                                      b=b_init[,,i], burn=15000, nsamp=25000,
+                                      thin=1, trim = 0.5, order = order, prec = 1,
+                                      jump=list(a=a_init[,i], prec = 1, positive=pos.est,
+                                                persistence=0.5, update.jbw=TRUE))
+
+
+names = paste0("./real_data_result/Feb_19/realdata_trim05_order2_40k_seed_", seed, ".RData")
+save(realdata_trim05_order2, file = names)
+
+realdata_trim05_order2_coda <- multi_chain_coda(realdata_trim05_order2,
+                                                burn = 15000, N_para, p, order = 2)
+plot(realdata_trim05_order2_coda)
+gelman.diag(realdata_trim05_order2_coda)
+summary(realdata_trim05_order2_coda)
+
+realdata_CI_t5o2 <- get.result.CI(realdata_trim05_order2, N_para, p)
+
 stopCluster(cl)
+
+
+
+############### load ###############
+
+load("./real_data_result/Feb_19/realdata_notrim_order2_40k_seed_3.RData")
+load("./real_data_result/Feb_19/realdata_trim05_order2_40k_seed_3.RData")
+
+############### plot ###############
+
+realdata_CI_nto2$type = "nto2"
+realdata_CI_t5o2$type = "t5o2"
+
+result_CI <- rbind(realdata_CI_nto2,
+                   realdata_CI_t5o2)
+
+result_CI %>%
+  mutate(across(type, factor,
+                levels=c("nto2","t5o2"))) %>%
+  ggplot(aes(x = variable, colour = setting)) +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
+  facet_wrap(vars(type))
