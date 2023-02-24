@@ -208,9 +208,6 @@ realdata_CI_t6o2 <- get.result.CI(realdata_trim06_order2, N_para, p)
 
 
 
-
-
-
 stopCluster(cl)
 
 ############### load ###############
@@ -218,17 +215,30 @@ stopCluster(cl)
 load("./real_data_result/Feb_19/realdata_notrim_order2_40k_seed_3.RData")
 load("./real_data_result/Feb_19/realdata_trim05_order2_40k_seed_3.RData")
 
+load("./real_data_result/Feb_20/realdata_trim09_order2_40k_seed_3.RData")
+load("./real_data_result/Feb_20/realdata_trim08_order2_40k_seed_3.RData")
+load("./real_data_result/Feb_20/realdata_trim07_order2_40k_seed_3.RData")
+load("./real_data_result/Feb_20/realdata_trim06_order2_40k_seed_3.RData")
+
 ############### plot ###############
 
 realdata_CI_nto2$type = "nto2"
+realdata_CI_t9o2$type = "t9o2"
+realdata_CI_t8o2$type = "t8o2"
+realdata_CI_t7o2$type = "t7o2"
+realdata_CI_t6o2$type = "t6o2"
 realdata_CI_t5o2$type = "t5o2"
 
-result_CI <- rbind(realdata_CI_nto2,
+result_CI_o2 <- rbind(realdata_CI_nto2,
+                   realdata_CI_t9o2,
+                   realdata_CI_t8o2,
+                   realdata_CI_t7o2,
+                   realdata_CI_t6o2,
                    realdata_CI_t5o2)
 
-result_CI %>%
+result_CI_o2 %>%
   mutate(across(type, factor,
-                levels=c("nto2","t5o2"))) %>%
+                levels=c("nto2", "t9o2", "t8o2", "t7o2", "t6o2", "t5o2"))) %>%
   ggplot(aes(x = variable, colour = setting)) +
   geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
   facet_wrap(vars(type))
