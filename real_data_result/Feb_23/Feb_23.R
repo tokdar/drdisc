@@ -233,32 +233,6 @@ summary(realdata_trim06_order4_coda)
 realdata_CI_t6o4 <- get.result.CI(realdata_trim06_order4, N_para, p)
 
 
-## trimming = 0.5
-
-data_trim05 <- get.trim.data(0.5)
-
-realdata_trim05_order4 <- foreach(i = 1:N_para,
-                                  .packages='BayesLogit') %dorng% 
-  bdregjump_adapt_poly_trim_alphanoPG(y=data_trim05$y, x=data_trim05$x,
-                                      b=b_init[,,i], burn=15000, nsamp=25000,
-                                      thin=1, trim = 0.5, order = order, prec = 1,
-                                      jump=list(a=a_init[,i], prec = 1, positive=pos.est,
-                                                persistence=0.5, update.jbw=TRUE))
-
-
-names = paste0("./real_data_result/Feb_23/realdata_trim05_order4_40k_seed_", seed, ".RData")
-save(realdata_trim05_order4, file = names)
-
-realdata_trim05_order4_coda <- multi_chain_coda(realdata_trim05_order4,
-                                                burn = 15000, N_para, p, order = order)
-plot(realdata_trim05_order4_coda)
-gelman.diag(realdata_trim05_order4_coda)
-summary(realdata_trim05_order4_coda)
-
-realdata_CI_t5o4 <- get.result.CI(realdata_trim05_order4, N_para, p)
-beta3_CI_t5o4 <- beta3.CI(realdata_trim05_order4, N_para, p)
-
-
 
 
 
@@ -270,6 +244,9 @@ load("./real_data_result/Feb_19/realdata_notrim_order2_40k_seed_3.RData")
 load("./real_data_result/Feb_19/realdata_trim05_order2_40k_seed_3.RData")
 
 load("./real_data_result/Feb_21/realdata_trim05_order3_40k_seed_3.RData")
+
+load("./real_data_result/Feb_23/realdata_notrim_order4_40k_seed_3.RData")
+load("./real_data_result/Feb_23/realdata_trim06_order4_40k_seed_3.RData")
 
 ############### plot ###############
 

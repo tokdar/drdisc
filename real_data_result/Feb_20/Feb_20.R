@@ -229,6 +229,33 @@ realdata_CI_t7o2$type = "t7o2"
 realdata_CI_t6o2$type = "t6o2"
 realdata_CI_t5o2$type = "t5o2"
 
+avg_len_nto2 <- realdata_CI_nto2 %>%
+  mutate(length = upper - lower) %>%
+  group_by(variable) %>%
+  summarize(avg_len = mean(length))
+
+cal_avg_len <- function(realdata_CI_nto2){
+  avg_len_nto2 <- realdata_CI_nto2 %>%
+    mutate(length = upper - lower) %>%
+    group_by(variable) %>%
+    summarize(avg_len = mean(length))
+  
+  return(avg_len_nto2[,2])
+}
+
+avg_len_o2 <- cbind(
+cal_avg_len(realdata_CI_nto2),
+cal_avg_len(realdata_CI_t9o2),
+cal_avg_len(realdata_CI_t8o2),
+cal_avg_len(realdata_CI_t7o2),
+cal_avg_len(realdata_CI_t6o2),
+cal_avg_len(realdata_CI_t5o2))
+
+
+rownames(avg_len_o2) <- paste0("a", 1:6)
+colnames(avg_len_o2) <- paste0("t=", seq(1,0.5, by = -0.1))
+
+
 result_CI_o2 <- rbind(realdata_CI_nto2,
                    realdata_CI_t9o2,
                    realdata_CI_t8o2,
@@ -236,9 +263,11 @@ result_CI_o2 <- rbind(realdata_CI_nto2,
                    realdata_CI_t6o2,
                    realdata_CI_t5o2)
 
+
 result_CI_o2 %>%
   mutate(across(type, factor,
                 levels=c("nto2", "t9o2", "t8o2", "t7o2", "t6o2", "t5o2"))) %>%
   ggplot(aes(x = variable, colour = setting)) +
+  geom_hline(yintercept = 0, colour = 'red') +
   geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
   facet_wrap(vars(type))

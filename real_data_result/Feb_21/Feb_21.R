@@ -68,16 +68,16 @@ get.result.CI <- function(result_trim07_order2, N_para = 6, p = 6){
 }
 
 
-beta3.CI <- function(realdata_trim05_order3, N_para = 10, p = 6){
+beta.CI <- function(realdata_trim05_order3, order = 3, N_para = 10, p = 6){
   b3_CI <- data.frame()
   for(i in 1:N_para){
-    b3_cur <- realdata_trim05_order3[[i]]$b[3,,]
+    b3_cur <- realdata_trim05_order3[[i]]$b[order,,]
     one_set_r <- apply(b3_cur, 1, function(x) quantile(x, c(0.025, 0.975)))
     for(j in 1:p){
       b3_CI <- rbind(b3_CI,
                      data.frame(lower = one_set_r[1,j],
                                 upper = one_set_r[2,j],
-                                variable = paste0("b3", j),
+                                variable = paste0("b", order, j),
                                 setting = as.character(i)))
     }
   }
@@ -256,7 +256,7 @@ gelman.diag(realdata_trim05_order3_coda)
 summary(realdata_trim05_order3_coda)
 
 realdata_CI_t5o3 <- get.result.CI(realdata_trim05_order3, N_para, p)
-beta3_CI_t5o3 <- beta3.CI(realdata_trim05_order3, N_para, p)
+beta3_CI_t5o3 <- beta.CI(realdata_trim05_order3, order = 3, N_para, p)
 
 
 
@@ -270,8 +270,20 @@ load("./real_data_result/Feb_19/realdata_notrim_order2_40k_seed_3.RData")
 load("./real_data_result/Feb_19/realdata_trim05_order2_40k_seed_3.RData")
 
 load("./real_data_result/Feb_21/realdata_trim05_order3_40k_seed_3.RData")
+load("./real_data_result/Feb_21/realdata_trim06_order3_40k_seed_3.RData")
+load("./real_data_result/Feb_21/realdata_trim07_order3_40k_seed_3.RData")
+load("./real_data_result/Feb_21/realdata_trim08_order3_40k_seed_3.RData")
+load("./real_data_result/Feb_21/realdata_trim09_order3_40k_seed_3.RData")
+load("./real_data_result/Feb_21/realdata_notrim_order3_40k_seed_3.RData")
 
 ############### plot ###############
+
+realdata_CI_nto3 <- get.result.CI(realdata_notrim_order3, N_para, p)
+realdata_CI_t9o3 <- get.result.CI(realdata_trim09_order3, N_para, p)
+realdata_CI_t8o3 <- get.result.CI(realdata_trim08_order3, N_para, p)
+realdata_CI_t7o3 <- get.result.CI(realdata_trim07_order3, N_para, p)
+realdata_CI_t6o3 <- get.result.CI(realdata_trim06_order3, N_para, p)
+realdata_CI_t5o3 <- get.result.CI(realdata_trim05_order3, N_para, p)
 
 realdata_CI_nto3$type = "nto3"
 realdata_CI_t9o3$type = "t9o3"
@@ -279,6 +291,20 @@ realdata_CI_t8o3$type = "t8o3"
 realdata_CI_t7o3$type = "t7o3"
 realdata_CI_t6o3$type = "t6o3"
 realdata_CI_t5o3$type = "t5o3"
+
+
+avg_len_o3 <- cbind(
+  cal_avg_len(realdata_CI_nto3),
+  cal_avg_len(realdata_CI_t9o3),
+  cal_avg_len(realdata_CI_t8o3),
+  cal_avg_len(realdata_CI_t7o3),
+  cal_avg_len(realdata_CI_t6o3),
+  cal_avg_len(realdata_CI_t5o3))
+
+
+rownames(avg_len_o3) <- paste0("a", 1:6)
+colnames(avg_len_o3) <- paste0("t=", seq(1,0.5, by = -0.1))
+
 
 result_CI_o3 <- rbind(realdata_CI_nto3,
                    realdata_CI_t9o3,
@@ -292,9 +318,100 @@ result_CI_o3 %>%
   mutate(across(type, factor,
                 levels=c("nto3", "t9o3", "t8o3", "t7o3", "t6o3", "t5o3"))) %>%
   ggplot(aes(x = variable, colour = setting)) +
+  geom_hline(yintercept = 0, colour = 'red') +
   geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
   facet_wrap(vars(type))
 
 beta3_CI_t5o3 %>%
   ggplot(aes(x = variable, colour = setting)) +
   geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2)
+
+
+beta3_CI_nto3 <-beta.CI(realdata_notrim_order3, order = 3, N_para, p)
+beta3_CI_t9o3 <-beta.CI(realdata_trim09_order3, order = 3, N_para, p)
+beta3_CI_t8o3 <-beta.CI(realdata_trim08_order3, order = 3, N_para, p)
+beta3_CI_t7o3 <-beta.CI(realdata_trim07_order3, order = 3, N_para, p)
+beta3_CI_t6o3 <-beta.CI(realdata_trim06_order3, order = 3, N_para, p)
+beta3_CI_t5o3 <-beta.CI(realdata_trim05_order3, order = 3, N_para, p)
+
+beta3_CI_nto3$type = "nto3"
+beta3_CI_t9o3$type = "t9o3"
+beta3_CI_t8o3$type = "t8o3"
+beta3_CI_t7o3$type = "t7o3"
+beta3_CI_t6o3$type = "t6o3"
+beta3_CI_t5o3$type = "t5o3"
+
+beta3_CI_o3 <- rbind(beta3_CI_nto3,
+                     beta3_CI_t9o3,
+                     beta3_CI_t8o3,
+                     beta3_CI_t7o3,
+                     beta3_CI_t6o3,
+                     beta3_CI_t5o3)
+
+beta3_CI_o3 %>%
+  mutate(across(type, factor,
+                levels=c("nto3", "t9o3", "t8o3", "t7o3", "t6o3", "t5o3"))) %>%
+  ggplot(aes(x = variable, colour = setting)) +
+  geom_hline(yintercept = 0, colour = 'red') +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
+  facet_wrap(vars(type))
+
+
+
+beta2_CI_nto3 <-beta.CI(realdata_notrim_order3, order = 2, N_para, p)
+beta2_CI_t9o3 <-beta.CI(realdata_trim09_order3, order = 2, N_para, p)
+beta2_CI_t8o3 <-beta.CI(realdata_trim08_order3, order = 2, N_para, p)
+beta2_CI_t7o3 <-beta.CI(realdata_trim07_order3, order = 2, N_para, p)
+beta2_CI_t6o3 <-beta.CI(realdata_trim06_order3, order = 2, N_para, p)
+beta2_CI_t5o3 <-beta.CI(realdata_trim05_order3, order = 2, N_para, p)
+
+beta2_CI_nto3$type = "nto3"
+beta2_CI_t9o3$type = "t9o3"
+beta2_CI_t8o3$type = "t8o3"
+beta2_CI_t7o3$type = "t7o3"
+beta2_CI_t6o3$type = "t6o3"
+beta2_CI_t5o3$type = "t5o3"
+
+beta2_CI_o3 <- rbind(beta2_CI_nto3,
+                     beta2_CI_t9o3,
+                     beta2_CI_t8o3,
+                     beta2_CI_t7o3,
+                     beta2_CI_t6o3,
+                     beta2_CI_t5o3)
+
+beta2_CI_o3 %>%
+  mutate(across(type, factor,
+                levels=c("nto3", "t9o3", "t8o3", "t7o3", "t6o3", "t5o3"))) %>%
+  ggplot(aes(x = variable, colour = setting)) +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
+  facet_wrap(vars(type))
+
+
+
+beta1_CI_nto3 <-beta.CI(realdata_notrim_order3, order = 1, N_para, p)
+beta1_CI_t9o3 <-beta.CI(realdata_trim09_order3, order = 1, N_para, p)
+beta1_CI_t8o3 <-beta.CI(realdata_trim08_order3, order = 1, N_para, p)
+beta1_CI_t7o3 <-beta.CI(realdata_trim07_order3, order = 1, N_para, p)
+beta1_CI_t6o3 <-beta.CI(realdata_trim06_order3, order = 1, N_para, p)
+beta1_CI_t5o3 <-beta.CI(realdata_trim05_order3, order = 1, N_para, p)
+
+beta1_CI_nto3$type = "nto3"
+beta1_CI_t9o3$type = "t9o3"
+beta1_CI_t8o3$type = "t8o3"
+beta1_CI_t7o3$type = "t7o3"
+beta1_CI_t6o3$type = "t6o3"
+beta1_CI_t5o3$type = "t5o3"
+
+beta1_CI_o3 <- rbind(beta1_CI_nto3,
+                     beta1_CI_t9o3,
+                     beta1_CI_t8o3,
+                     beta1_CI_t7o3,
+                     beta1_CI_t6o3,
+                     beta1_CI_t5o3)
+
+beta1_CI_o3 %>%
+  mutate(across(type, factor,
+                levels=c("nto3", "t9o3", "t8o3", "t7o3", "t6o3", "t5o3"))) %>%
+  ggplot(aes(x = variable, colour = setting)) +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
+  facet_wrap(vars(type))
