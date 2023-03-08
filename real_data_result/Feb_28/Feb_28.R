@@ -59,6 +59,10 @@ n_chain <- 10
 load("./real_data_result/Feb_19/realdata_notrim_order2_40k_seed_3.RData")
 load("./real_data_result/Feb_19/realdata_trim05_order2_40k_seed_3.RData")
 
+load("./real_data_result/Feb_20/realdata_trim09_order2_40k_seed_3.RData")
+load("./real_data_result/Feb_20/realdata_trim08_order2_40k_seed_3.RData")
+load("./real_data_result/Feb_20/realdata_trim07_order2_40k_seed_3.RData")
+load("./real_data_result/Feb_20/realdata_trim06_order2_40k_seed_3.RData")
 
 ################### data ###################
 
@@ -80,11 +84,66 @@ save(res_notrim_order2, file = "./real_data_result/Feb_28/res_notrim_order2.RDat
 
 # trim = 0.9 #
 
+res_trim09_order2 <- foreach(i = 1:n_chain) %dorng% WAIC(data_trim09$y, data_trim09$x, realdata_trim09_order2[[i]], positive=T, usen = 1000, trim = 0.9)
+waic_trim09_order2 <- colMeans(matrix(unlist(res_trim09_order2), ncol = 2, byrow = T))
+
+save(res_trim09_order2, file = "./real_data_result/Feb_28/res_trim09_order2.RData")
+
 # trim = 0.8 #
+
+res_trim08_order2 <- foreach(i = 1:n_chain) %dorng% WAIC(data_trim08$y, data_trim08$x, realdata_trim08_order2[[i]], positive=T, usen = 1000, trim = 0.8)
+waic_trim08_order2 <- colMeans(matrix(unlist(res_trim08_order2), ncol = 2, byrow = T))
+
+save(res_trim08_order2, file = "./real_data_result/Feb_28/res_trim08_order2.RData")
 
 # trim = 0.7 #
 
+res_trim07_order2 <- foreach(i = 1:n_chain) %dorng% WAIC(data_trim07$y, data_trim07$x, realdata_trim07_order2[[i]], positive=T, usen = 1000, trim = 0.7)
+waic_trim07_order2 <- colMeans(matrix(unlist(res_trim07_order2), ncol = 2, byrow = T))
+
+save(res_trim07_order2, file = "./real_data_result/Feb_28/res_trim07_order2.RData")
+
 # trim = 0.6 #
 
+res_trim06_order2 <- foreach(i = 1:n_chain) %dorng% WAIC(data_trim06$y, data_trim06$x, realdata_trim06_order2[[i]], positive=T, usen = 1000, trim = 0.6)
+waic_trim06_order2 <- colMeans(matrix(unlist(res_trim06_order2), ncol = 2, byrow = T))
+
+save(res_trim06_order2, file = "./real_data_result/Feb_28/res_trim06_order2.RData")
+
 # trim = 0.5 #
+
+res_trim05_order2 <- foreach(i = 1:n_chain) %dorng% WAIC(data_trim05$y, data_trim05$x, realdata_trim05_order2[[i]], positive=T, usen = 1000, trim = 0.5)
+waic_trim05_order2 <- colMeans(matrix(unlist(res_trim05_order2), ncol = 2, byrow = T))
+
+save(res_trim05_order2, file = "./real_data_result/Feb_28/res_trim05_order2.RData")
+
+
+
+stopCluster(cl)
+
+i <- 1
+
+rbind(
+  c(waic_notrim_order2[i], waic_trim09_order2[i], waic_trim08_order2[i],
+    waic_trim07_order2[i], waic_trim06_order2[i], waic_trim05_order2[i]),
+  c(waic_notrim_order3[i], waic_trim09_order3[i], waic_trim08_order3[i],
+    waic_trim07_order3[i], waic_trim06_order3[i], waic_trim05_order3[i]),
+  c(waic_notrim_order4[i], waic_trim09_order4[i], waic_trim08_order4[i],
+    waic_trim07_order4[i], waic_trim06_order4[i], waic_trim05_order4[i])
+)
+
+i <- 2
+
+rbind(
+  c(waic_notrim_order2[i], waic_trim09_order2[i], waic_trim08_order2[i],
+    waic_trim07_order2[i], waic_trim06_order2[i], waic_trim05_order2[i]),
+  c(waic_notrim_order3[i], waic_trim09_order3[i], waic_trim08_order3[i],
+    waic_trim07_order3[i], waic_trim06_order3[i], waic_trim05_order3[i]),
+  c(waic_notrim_order4[i], waic_trim09_order4[i], waic_trim08_order4[i],
+    waic_trim07_order4[i], waic_trim06_order4[i], waic_trim05_order4[i])
+)
+
+
+
+
 
